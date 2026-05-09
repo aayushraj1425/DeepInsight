@@ -10,15 +10,13 @@ if str(BACKEND_DIR) not in sys.path:
 
 load_dotenv(BACKEND_DIR / ".env")
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
 
 from events import AgentEvent
-from runtime import create_session, get_queue, remove_session, emit
 from agents.graph import build_graph
-from demo_cache import run_cached_demo
+from runtime import create_session, emit, get_queue, remove_session
 
 app = FastAPI(title="DeepQuery")
 
@@ -34,10 +32,6 @@ app.add_middleware(
 graph = build_graph()
 
 
-class InvestigationRequest(BaseModel):
-    query: str
-
-
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
@@ -47,15 +41,28 @@ def sse_data(event: AgentEvent) -> str:
     return f"data: {event.model_dump_json()}\n\n"
 
 
-async def run_pipeline(session_id: str, query: str) -> None:
+async def run_pipeline(session_id: str, query: str, uploads: list[dict]) -> None:
     try:
         initial_state = {
             "session_id": session_id,
             "query": query,
+            "uploads": uploads,
+            "documents": [],
+            "document_brief": "",
+            "research_plan": {},
             "subqueries": [],
             "papers": [],
+            "paper_sources": [],
+            "datasets": [],
+            "dataset_findings": [],
+            "dataset_analysis": {},
+            "validation_report": {},
+            "source_index": {},
             "findings": [],
             "analysis": {},
+            "reasoning": {},
+            "economic_model": {},
+            "fact_check_report": {},
             "critic_feedback": "",
             "critic_retries": 0,
             "approved": False,
@@ -63,8 +70,7 @@ async def run_pipeline(session_id: str, query: str) -> None:
             "report": "",
             "error": None,
         }
-        if not await run_cached_demo(session_id, query):
-            await graph.ainvoke(initial_state)
+        await graph.ainvoke(initial_state)
         await emit(session_id, AgentEvent(
             type="done", agent="system",
             payload={"message": "Research complete"}
@@ -81,10 +87,21 @@ async def run_pipeline(session_id: str, query: str) -> None:
 
 
 @app.post("/api/investigations")
-async def create_investigation(req: InvestigationRequest, background_tasks: BackgroundTasks):
+async def create_investigation(
+    background_tasks: BackgroundTasks,
+    query: str = Form(...),
+    files: list[UploadFile] | None = File(None),
+):
     session_id = str(uuid.uuid4())
     create_session(session_id)
-    background_tasks.add_task(run_pipeline, session_id, req.query)
+    uploads: list[dict] = []
+    for upload in files or []:
+        uploads.append({
+            "name": upload.filename or "attachment",
+            "content_type": upload.content_type or "",
+            "data": await upload.read(),
+        })
+    background_tasks.add_task(run_pipeline, session_id, query, uploads)
     return {"id": session_id}
 
 

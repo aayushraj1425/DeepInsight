@@ -1,9 +1,36 @@
 import type { LucideIcon } from "lucide-react"
-import { BarChart3, Brain, Check, FileJson, FileText, Loader2, Search, ShieldCheck, Sigma, X } from "lucide-react"
-import type { AgentEvent } from "../types/events"
-import { cn } from "../lib/utils"
+import {
+  BarChart3,
+  Brain,
+  Check,
+  FileCheck2,
+  FileJson,
+  FileText,
+  Loader2,
+  Database,
+  Search,
+  ShieldCheck,
+  Sigma,
+  Upload,
+  X,
+} from "lucide-react"
 
-type AgentId = "planner" | "discovery" | "extractor" | "analyst" | "critic" | "visualizer" | "reporter"
+import { cn } from "../lib/utils"
+import type { AgentEvent } from "../types/events"
+
+type AgentId =
+  | "ingestor"
+  | "orchestrator"
+  | "discovery"
+  | "datafinder"
+  | "validator"
+  | "extractor"
+  | "analyst"
+  | "reasoner"
+  | "economist"
+  | "factchecker"
+  | "visualizer"
+  | "reporter"
 type NodeStatus = "idle" | "running" | "done" | "rejected" | "error"
 
 interface AgentStep {
@@ -14,11 +41,16 @@ interface AgentStep {
 }
 
 const AGENTS: AgentStep[] = [
-  { id: "planner", label: "Planner", detail: "Splits the question", Icon: Brain },
-  { id: "discovery", label: "Discovery", detail: "Searches papers", Icon: Search },
+  { id: "ingestor", label: "Ingestor", detail: "Reads uploads", Icon: Upload },
+  { id: "orchestrator", label: "Orchestrator", detail: "Plans investigation", Icon: Brain },
+  { id: "discovery", label: "Source Discovery", detail: "Searches papers", Icon: Search },
+  { id: "datafinder", label: "Datafinder", detail: "Finds datasets", Icon: Database },
+  { id: "validator", label: "Validator", detail: "Scores sources", Icon: FileCheck2 },
   { id: "extractor", label: "Extractor", detail: "Pulls findings", Icon: FileJson },
   { id: "analyst", label: "Analyst", detail: "Runs tools", Icon: Sigma },
-  { id: "critic", label: "Critic", detail: "Approves or rejects", Icon: ShieldCheck },
+  { id: "reasoner", label: "Reasoner", detail: "Connects causes", Icon: ShieldCheck },
+  { id: "economist", label: "Economist", detail: "Builds scenarios", Icon: Sigma },
+  { id: "factchecker", label: "Fact Checker", detail: "Verifies claims", Icon: FileCheck2 },
   { id: "visualizer", label: "Visualizer", detail: "Builds charts", Icon: BarChart3 },
   { id: "reporter", label: "Reporter", detail: "Writes report", Icon: FileText },
 ]
@@ -35,8 +67,8 @@ function lastAgentEvent(events: AgentEvent[], agent: AgentId) {
   return [...events].reverse().find((event) => event.agent === agent) ?? null
 }
 
-function latestCriticDecision(events: AgentEvent[]) {
-  return [...events].reverse().find((event) => event.type === "critic_decision") ?? null
+function latestFactCheck(events: AgentEvent[]) {
+  return [...events].reverse().find((event) => event.type === "factcheck_ready") ?? null
 }
 
 function hasLaterEvent(events: AgentEvent[], timestamp: string, agent: AgentId) {
@@ -49,12 +81,9 @@ function statusFor(events: AgentEvent[], agent: AgentId): NodeStatus {
   if (last.type === "error") return "error"
   if (last.type === "node_start") return "running"
 
-  if (agent === "critic") {
-    const decision = latestCriticDecision(events)
-    if (
-      decision?.payload.decision === "reject" &&
-      !hasLaterEvent(events, decision.timestamp, "visualizer")
-    ) {
+  if (agent === "factchecker") {
+    const decision = latestFactCheck(events)
+    if (decision?.payload.approved_for_report === false && !hasLaterEvent(events, decision.timestamp, "visualizer")) {
       return "rejected"
     }
   }
@@ -74,8 +103,8 @@ function StatusGlyph({ status }: { status: NodeStatus }) {
 }
 
 export function AgentDAG({ events }: { events: AgentEvent[]; isRunning: boolean }) {
-  const criticRejects = events.filter(
-    (event) => event.type === "critic_decision" && event.payload.decision === "reject"
+  const factCheckFlags = events.filter(
+    (event) => event.type === "factcheck_ready" && event.payload.approved_for_report === false
   ).length
   const completed = AGENTS.filter((agent) => {
     const status = statusFor(events, agent.id)
@@ -87,25 +116,23 @@ export function AgentDAG({ events }: { events: AgentEvent[]; isRunning: boolean 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-gray-100">Agent graph</h2>
-          <p className="mt-1 text-xs text-gray-500">{completed}/7 stages completed</p>
+          <p className="mt-1 text-xs text-gray-500">{completed}/{AGENTS.length} stages completed</p>
         </div>
-        {criticRejects > 0 && (
+        {factCheckFlags > 0 && (
           <div className="rounded bg-red-950 px-2.5 py-1 text-xs font-medium text-red-200">
-            {criticRejects} critic rejection{criticRejects === 1 ? "" : "s"}
+            {factCheckFlags} fact-check flag{factCheckFlags === 1 ? "" : "s"}
           </div>
         )}
       </div>
 
-      <div className="grid gap-3 md:grid-cols-7">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
         {AGENTS.map(({ id, label, detail, Icon }, index) => {
           const status = statusFor(events, id)
           const attempts = attemptsFor(events, id)
 
           return (
             <div key={id} className="relative min-w-0">
-              {index > 0 && (
-                <div className="absolute -left-3 top-8 hidden h-px w-3 bg-gray-800 md:block" />
-              )}
+              {index > 0 && <div className="absolute -left-3 top-8 hidden h-px w-3 bg-gray-800 xl:block" />}
               <div className={cn("h-full rounded-lg border p-3 transition-colors", STATUS_CLASS[status])}>
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <Icon size={17} className="shrink-0" />
@@ -113,11 +140,7 @@ export function AgentDAG({ events }: { events: AgentEvent[]; isRunning: boolean 
                 </div>
                 <div className="truncate text-sm font-semibold">{label}</div>
                 <div className="mt-1 min-h-8 text-xs leading-4 opacity-70">{detail}</div>
-                {attempts > 1 && (
-                  <div className="mt-2 text-[11px] font-medium opacity-80">
-                    attempt {attempts}
-                  </div>
-                )}
+                {attempts > 1 && <div className="mt-2 text-[11px] font-medium opacity-80">attempt {attempts}</div>}
               </div>
             </div>
           )

@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 EventType = Literal[
     "node_start", "node_end", "tool_call", "tool_result",
     "critic_decision", "chart_ready", "report_ready",
+    "documents_ready", "plan_ready", "sources_ready", "datasets_ready",
+    "validation_ready", "reasoning_ready", "model_ready", "factcheck_ready",
     "error", "done"
 ]
 

@@ -1,8 +1,12 @@
 from pydantic import BaseModel, Field
+
 from agents.state import AgentState
 from events import AgentEvent
-from runtime import emit
 from llm import client
+from runtime import emit
+from tools.prompting import clip_text, compact_json
+
+MAX_CRITIC_RETRIES = 1
 
 
 class CriticVerdict(BaseModel):
@@ -24,7 +28,7 @@ async def critic_node(state: AgentState) -> dict:
 
     await emit(sid, AgentEvent(
         type="node_start", agent="critic",
-        payload={"message": f"Reviewing analysis quality... (attempt {retries + 1}/3)"}
+        payload={"message": f"Reviewing analysis quality... (attempt {retries + 1}/2)"}
     ))
 
     verdict: CriticVerdict = await client.chat.completions.create(
@@ -38,8 +42,10 @@ async def critic_node(state: AgentState) -> dict:
                     "REJECT if:\n"
                     "- findings list is empty or has fewer than 2 items\n"
                     "- analysis contains an error key or only stub data\n"
-                    "- key statistics are missing (e.g. aggregate ran but value_stats is absent)\n"
+                    "- key statistics are missing (for example aggregate ran but value_stats is absent)\n"
                     "- the analysis does not address the research question\n\n"
+                    "If you reject, give feedback that can be addressed by re-synthesizing the same evidence only. "
+                    "Do not ask for new retrieval.\n\n"
                     "APPROVE if the analysis is substantive and accurately represents the data, "
                     "even if findings are sparse."
                 ),
@@ -47,9 +53,9 @@ async def critic_node(state: AgentState) -> dict:
             {
                 "role": "user",
                 "content": (
-                    f"Research query: {state['query']}\n"
+                    f"Research query: {clip_text(state['query'], 1200)}\n"
                     f"Findings count: {len(findings)}\n"
-                    f"Analysis result: {analysis}"
+                    f"Analysis result: {compact_json(analysis, max_chars=14000)}"
                 ),
             },
         ],
@@ -66,7 +72,7 @@ async def critic_node(state: AgentState) -> dict:
             "feedback": verdict.feedback,
             "retries_used": retries,
             "retry_count": new_retries,
-            "max_retries": 2,
+            "max_retries": MAX_CRITIC_RETRIES,
         }
     ))
     await emit(sid, AgentEvent(
@@ -81,6 +87,6 @@ async def critic_node(state: AgentState) -> dict:
 
 
 def route_after_critic(state: AgentState) -> str:
-    if state.get("approved", False) or state.get("critic_retries", 0) >= 2:
+    if state.get("approved", False) or state.get("critic_retries", 0) >= MAX_CRITIC_RETRIES:
         return "visualizer"
     return "analyst"

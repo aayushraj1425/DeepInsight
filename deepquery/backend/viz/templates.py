@@ -6,8 +6,7 @@ from typing import Any
 import plotly.graph_objects as go
 from plotly.utils import PlotlyJSONEncoder
 
-
-NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
+from tools.numbers import NUMBER_RE, number_from_value
 
 
 def _figure_dict(fig: go.Figure) -> dict:
@@ -17,20 +16,7 @@ def _figure_dict(fig: go.Figure) -> dict:
 
 
 def _number(value: Any) -> float | None:
-    if value is None:
-        return None
-    if isinstance(value, (int, float)):
-        if math.isfinite(float(value)):
-            return float(value)
-        return None
-
-    match = NUMBER_RE.search(str(value).replace(",", ""))
-    if not match:
-        return None
-    try:
-        return float(match.group(0))
-    except ValueError:
-        return None
+    return number_from_value(value)
 
 
 def _ci_bounds(ci: Any, value: float) -> tuple[float, float] | None:
@@ -67,6 +53,20 @@ def _short(text: Any, limit: int = 68) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 1].rstrip() + "..."
+
+
+def _join_sources(titles: list[Any], limit: int = 3) -> str:
+    names: list[str] = []
+    seen: set[str] = set()
+    for title in titles:
+        name = _short(title, 60)
+        if not name or name == "Untitled" or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+        if len(names) >= limit:
+            break
+    return ", ".join(names) if names else "source metadata"
 
 
 def _numeric_findings(findings: list[dict]) -> list[dict]:
@@ -229,12 +229,367 @@ def timeline(findings: list[dict]) -> tuple[dict, str]:
     return _figure_dict(fig), insight
 
 
-def chartable_counts(findings: list[dict], analysis: dict) -> dict[str, int]:
+def source_mix(findings: list[dict]) -> tuple[dict, str]:
+    counts: dict[str, int] = {}
+    for finding in findings:
+        source_type = str(finding.get("source_type") or "unknown").replace("_", " ").title()
+        counts[source_type] = counts.get(source_type, 0) + 1
+
+    if not counts:
+        raise ValueError("source_mix requires at least one finding")
+
+    labels = list(counts.keys())
+    values = list(counts.values())
+    colors = ["#38bdf8", "#22c55e", "#f59e0b", "#a78bfa", "#f43f5e"][: len(labels)]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            marker={"color": colors, "line": {"color": "#e5e7eb", "width": 0.5}},
+            hovertemplate="<b>%{x}</b><br>Findings: %{y}<extra></extra>",
+        )
+    ])
+    fig.update_layout(
+        **_base_layout("Evidence mix by source type"),
+        xaxis={"title": "Source type", "gridcolor": "#111111"},
+        yaxis={"title": "Extracted or computed findings", "gridcolor": "#1f2937"},
+        height=330,
+    )
+
+    top_idx = max(range(len(values)), key=lambda idx: values[idx])
+    insight = f"{labels[top_idx]} contributes the most evidence items in this run ({values[top_idx]} findings)."
+    return _figure_dict(fig), insight
+
+
+def dataset_metric_summary(findings: list[dict]) -> tuple[dict, str]:
+    rows = [
+        row for row in _numeric_findings(findings)
+        if row.get("source_type") == "dataset"
+    ][:12]
+    if not rows:
+        raise ValueError("dataset_metric_summary requires dataset findings")
+
+    labels = [_short(row.get("metric"), 42) for row in rows]
+    values = [row["_numeric_value"] for row in rows]
+    sources = [_short(row.get("source_title"), 80) for row in rows]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=values,
+            y=labels,
+            orientation="h",
+            marker={"color": "#14b8a6", "line": {"color": "#99f6e4", "width": 0.8}},
+            customdata=sources,
+            hovertemplate="<b>%{y}</b><br>Computed value: %{x:.3f}<br>%{customdata}<extra></extra>",
+        )
+    ])
+    fig.update_layout(
+        **_base_layout("Computed statistics from public datasets"),
+        xaxis={"title": "Computed numeric value", "gridcolor": "#1f2937", "zerolinecolor": "#4b5563"},
+        yaxis={"autorange": "reversed", "gridcolor": "#111111"},
+        height=max(340, 120 + len(rows) * 32),
+    )
+
+    insight = f"{len(rows)} computed dataset statistics are shown; hover each bar to see the source dataset."
+    return _figure_dict(fig), insight
+
+
+def trend_series(findings: list[dict]) -> tuple[dict, str]:
+    rows = [
+        row for row in _numeric_findings(findings)
+        if row.get("series_id") and (isinstance(row.get("year"), int) or str(row.get("year") or "").isdigit())
+    ]
+    if len(rows) < 4:
+        raise ValueError("trend_series requires at least four dated series findings")
+
+    grouped: dict[str, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(str(row.get("series_id")), []).append(row)
+
+    traces = []
+    source_titles: list[str] = []
+    plotted = 0
+    for series_id, series_rows in grouped.items():
+        series_rows = sorted(series_rows, key=lambda row: int(row["year"]))
+        if len(series_rows) < 2:
+            continue
+        first_value = series_rows[0]["_numeric_value"]
+        if not first_value:
+            continue
+        years = [int(row["year"]) for row in series_rows]
+        normalized = [round(100 * row["_numeric_value"] / first_value, 2) for row in series_rows]
+        raw_values = [row.get("value") for row in series_rows]
+        label = _short(series_rows[-1].get("source_title") or series_rows[-1].get("metric"), 54)
+        source_titles.append(label)
+        traces.append(go.Scatter(
+            x=years,
+            y=normalized,
+            mode="lines+markers",
+            name=label,
+            customdata=raw_values,
+            hovertemplate="<b>%{fullData.name}</b><br>Year: %{x}<br>Indexed: %{y:.1f}<br>Raw: %{customdata}<extra></extra>",
+        ))
+        plotted += 1
+        if plotted >= 5:
+            break
+
+    if not traces:
+        raise ValueError("trend_series found no plottable series")
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        **_base_layout("Indexed trusted time-series trends"),
+        xaxis={"title": "Year", "gridcolor": "#1f2937"},
+        yaxis={"title": "Index (first observed year = 100)", "gridcolor": "#1f2937", "zerolinecolor": "#4b5563"},
+        legend={"orientation": "h", "y": -0.28},
+        height=430,
+        annotations=[
+            {
+                "text": "Each line starts at 100 in its first observed year; compare direction, not units.",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0,
+                "y": 1.08,
+                "showarrow": False,
+                "font": {"size": 11, "color": "#94a3b8"},
+                "align": "left",
+            }
+        ],
+    )
+    insight = (
+        f"{plotted} trusted time series are indexed to their first observed year, "
+        f"so directional movement can be compared without mixing units (sources: {_join_sources(source_titles)})."
+    )
+    return _figure_dict(fig), insight
+
+
+def evidence_quality(validation_report: dict) -> tuple[dict, str]:
+    rows = validation_report.get("source_scores") or []
+    rows = [row for row in rows if row.get("credibility_score") is not None][:18]
+    if not rows:
+        raise ValueError("evidence_quality requires validation source scores")
+
+    labels = [_short(row.get("title") or row.get("provider"), 46) for row in rows]
+    values = [float(row.get("credibility_score") or 0) for row in rows]
+    providers = [row.get("provider") or "Unknown" for row in rows]
+    colors = ["#22c55e" if value >= 0.85 else "#f59e0b" if value >= 0.7 else "#f43f5e" for value in values]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=values,
+            y=labels,
+            orientation="h",
+            marker={"color": colors, "line": {"color": "#e5e7eb", "width": 0.4}},
+            customdata=providers,
+            hovertemplate="<b>%{y}</b><br>Provider: %{customdata}<br>Credibility score: %{x:.2f}<extra></extra>",
+        )
+    ])
+    fig.update_layout(
+        **_base_layout("Evidence quality and source credibility"),
+        xaxis={"title": "Credibility score", "range": [0, 1], "gridcolor": "#1f2937"},
+        yaxis={"autorange": "reversed", "gridcolor": "#111111"},
+        height=max(360, 110 + len(rows) * 28),
+        annotations=[
+            {
+                "text": "Green = stronger source base; amber/red = use as directional or caveated evidence.",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0,
+                "y": 1.08,
+                "showarrow": False,
+                "font": {"size": 11, "color": "#94a3b8"},
+                "align": "left",
+            }
+        ],
+    )
+    avg = validation_report.get("average_credibility", 0)
+    insight = (
+        f"Average source credibility is {avg}; lower-scored sources should be treated as directional, "
+        f"not definitive (examples: {_join_sources([row.get('title') for row in rows])})."
+    )
+    return _figure_dict(fig), insight
+
+
+def scenario_matrix(economic_model: dict) -> tuple[dict, str]:
+    scenarios = economic_model.get("scenarios") or []
+    if not scenarios:
+        raise ValueError("scenario_matrix requires economic scenarios")
+
+    confidence_score = {"low": 0.35, "medium": 0.65, "high": 0.9}
+    labels = [_short(row.get("name"), 36) for row in scenarios[:6]]
+    values = [confidence_score.get(str(row.get("confidence", "")).lower(), 0.5) for row in scenarios[:6]]
+    outcomes = [_short(row.get("directional_outcome"), 110) for row in scenarios[:6]]
+    evidence = [_join_sources(row.get("evidence_basis") or [], limit=2) for row in scenarios[:6]]
+    colors = ["#38bdf8", "#22c55e", "#f59e0b", "#f43f5e", "#a78bfa", "#14b8a6"][: len(labels)]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            marker={"color": colors, "line": {"color": "#e5e7eb", "width": 0.5}},
+            customdata=list(zip(outcomes, evidence, strict=False)),
+            hovertemplate="<b>%{x}</b><br>Confidence: %{y:.2f}<br>%{customdata[0]}<br>Evidence: %{customdata[1]}<extra></extra>",
+        )
+    ])
+    fig.update_layout(
+        **_base_layout("Scenario confidence map"),
+        xaxis={"title": "Scenario", "gridcolor": "#111111"},
+        yaxis={"title": "Qualitative confidence score", "range": [0, 1], "gridcolor": "#1f2937"},
+        height=340,
+        annotations=[
+            {
+                "text": "Qualitative scenarios only; no invented percentages or point forecasts.",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0,
+                "y": 1.08,
+                "showarrow": False,
+                "font": {"size": 11, "color": "#94a3b8"},
+                "align": "left",
+            }
+        ],
+    )
+    insight = (
+        "Scenarios are qualitative and assumption-driven; confidence reflects evidence strength, not certainty "
+        f"(evidence examples: {_join_sources([item for row in scenarios for item in (row.get('evidence_basis') or [])])})."
+    )
+    return _figure_dict(fig), insight
+
+
+def trend_change_summary(analysis: dict) -> tuple[dict, str]:
+    trends = ((analysis.get("trends") or {}).get("trends") or [])[:12]
+    rows = [
+        trend for trend in trends
+        if trend.get("pct_change") is not None or trend.get("absolute_change") is not None
+    ]
+    if not rows:
+        raise ValueError("trend_change_summary requires trend analysis output")
+
+    use_pct = any(row.get("pct_change") is not None for row in rows)
+    values = [
+        float(row.get("pct_change") if use_pct and row.get("pct_change") is not None else row.get("absolute_change") or 0)
+        for row in rows
+    ]
+    labels = [_short(row.get("metric") or row.get("source_title") or row.get("series_id"), 52) for row in rows]
+    sources = [_short(row.get("source_title") or row.get("provider") or "", 70) for row in rows]
+    periods = [
+        f"{row.get('start_year', 'n/a')}-{row.get('latest_year', 'n/a')}"
+        for row in rows
+    ]
+    colors = ["#22c55e" if value >= 0 else "#f97316" for value in values]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=values,
+            y=labels,
+            orientation="h",
+            marker={"color": colors, "line": {"color": "#e5e7eb", "width": 0.5}},
+            customdata=list(zip(sources, periods, strict=False)),
+            hovertemplate=(
+                "<b>%{y}</b><br>"
+                + ("Change: %{x:.2f}%" if use_pct else "Change: %{x:.3f}")
+                + "<br>Period: %{customdata[1]}<br>Source: %{customdata[0]}<extra></extra>"
+            ),
+        )
+    ])
+    fig.update_layout(
+        **_base_layout("Historical change in key indicators"),
+        xaxis={
+            "title": "Percent change" if use_pct else "Absolute change",
+            "gridcolor": "#1f2937",
+            "zerolinecolor": "#94a3b8",
+        },
+        yaxis={"autorange": "reversed", "gridcolor": "#111111"},
+        height=max(340, 120 + len(rows) * 34),
+        annotations=[
+            {
+                "text": "Uses computed trend analysis from loaded public time series; period differs by source availability.",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0,
+                "y": 1.08,
+                "showarrow": False,
+                "font": {"size": 11, "color": "#94a3b8"},
+                "align": "left",
+            }
+        ],
+    )
+    strongest_idx = max(range(len(values)), key=lambda idx: abs(values[idx]))
+    unit = "%" if use_pct else ""
+    insight = (
+        f"The largest displayed historical movement is {labels[strongest_idx]} "
+        f"({values[strongest_idx]:.2f}{unit}, source: {sources[strongest_idx]})."
+    )
+    return _figure_dict(fig), insight
+
+
+def claim_support_status(fact_check_report: dict) -> tuple[dict, str]:
+    claims = fact_check_report.get("checked_claims") or []
+    if not claims:
+        raise ValueError("claim_support_status requires checked claims")
+
+    labels_order = ["supported", "partially_supported", "contradicted", "insufficient_evidence"]
+    counts = {label: 0 for label in labels_order}
+    for claim in claims:
+        status = str(claim.get("status") or "insufficient_evidence")
+        counts[status if status in counts else "insufficient_evidence"] += 1
+
+    labels = [label.replace("_", " ").title() for label in labels_order]
+    values = [counts[label] for label in labels_order]
+    colors = ["#22c55e", "#f59e0b", "#ef4444", "#64748b"]
+
+    fig = go.Figure(data=[
+        go.Bar(
+            x=labels,
+            y=values,
+            marker={"color": colors, "line": {"color": "#e5e7eb", "width": 0.5}},
+            hovertemplate="<b>%{x}</b><br>Claims: %{y}<extra></extra>",
+        )
+    ])
+    fig.update_layout(
+        **_base_layout("Fact-check status of major claims"),
+        xaxis={"title": "Claim status", "gridcolor": "#111111"},
+        yaxis={"title": "Checked claims", "dtick": 1, "gridcolor": "#1f2937"},
+        height=330,
+        annotations=[
+            {
+                "text": "Only claims backed by provided sources should appear as findings in the report.",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0,
+                "y": 1.08,
+                "showarrow": False,
+                "font": {"size": 11, "color": "#94a3b8"},
+                "align": "left",
+            }
+        ],
+    )
+    unsupported = counts["contradicted"] + counts["insufficient_evidence"]
+    insight = (
+        f"{values[0]} claim(s) are fully supported and {unsupported} claim(s) need caveats or exclusion."
+    )
+    return _figure_dict(fig), insight
+
+
+def chartable_counts(findings: list[dict], analysis: dict, validation_report: dict | None = None, economic_model: dict | None = None) -> dict[str, int]:
     return {
+        "trend_series": len([
+            row for row in _numeric_findings(findings)
+            if row.get("series_id") and (isinstance(row.get("year"), int) or str(row.get("year") or "").isdigit())
+        ]),
+        "trend_change_summary": len((analysis.get("trends") or {}).get("trends") or []),
+        "evidence_quality": len((validation_report or {}).get("source_scores") or []),
+        "scenario_matrix": len((economic_model or {}).get("scenarios") or []),
         "forest_plot": len(_numeric_findings(findings)),
         "bar_comparison": len((analysis.get("compare") or {}).get("groups") or []),
         "timeline": len([
             row for row in _numeric_findings(findings)
             if isinstance(row.get("year"), int) or str(row.get("year") or "").isdigit()
+        ]),
+        "source_mix": len(findings),
+        "dataset_metric_summary": len([
+            row for row in _numeric_findings(findings)
+            if row.get("source_type") == "dataset"
         ]),
     }

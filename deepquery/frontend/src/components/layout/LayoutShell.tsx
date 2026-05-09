@@ -1,284 +1,459 @@
-import type { AgentEvent, ChartSpec } from "../../types/events"
+import {
+  startTransition,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from "react"
+import { FilePlus2, Play, RotateCcw, X } from "lucide-react"
+
+import type {
+  AgentEvent,
+  ChartSpec,
+  DatasetSource,
+  SemanticScholarSource,
+  UploadedDocument,
+} from "../../types/events"
 import { ChartsGrid } from "./ChartsGrid"
-import { HeroCard } from "./HeroCard"
+import { HeroCard, type HeroStatus } from "./HeroCard"
 import { KeyTakeaways } from "./KeyTakeaways"
 import { ResearchSidebar } from "./ResearchSidebar"
-import type { ResearchSource } from "./ResearchSources"
+import type { DatasetCard, ResearchSource, UploadedDocumentCard } from "./ResearchSources"
 import { ReportSection } from "./ReportSection"
 import { Topbar } from "./Topbar"
 
-const NAV_ITEMS = ["Dashboard", "Runs", "Agents", "Reports", "Settings"]
+const API_BASE =
+  (
+    (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
+    (import.meta.env.VITE_API_URL as string | undefined)
+  )?.replace(/\/$/, "") ??
+  (typeof window === "undefined"
+    ? "http://127.0.0.1:8000"
+    : `${window.location.protocol}//${window.location.hostname}:8000`)
 
-const HERO_METRICS = [
-  { label: "Papers", value: "247" },
-  { label: "Findings", value: "1,843" },
-  { label: "Tools", value: "6" },
-  { label: "Charts", value: "3" },
-  { label: "Duration", value: "4m 12s" },
-]
+const ACCEPTED_FILES = ".pdf,.docx,.txt,.md"
 
-const REPORT_MARKDOWN = `# Research Report
+function asString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback
+}
 
-## Bottom line
-Sleep deprivation is associated with worse cognitive performance across extracted abstract-level findings.
+function formatDuration(startedAt: number | null, endedAt: number | null, now: number) {
+  if (!startedAt) return "--"
+  const totalSeconds = Math.max(0, Math.floor(((endedAt ?? now) - startedAt) / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`
+}
 
-## Evidence
-- Reaction time and vigilance outcomes show the clearest deterioration signals.
-- Working-memory accuracy trends downward after restricted sleep.
-- Executive-control measures decline after acute sleep loss.
-- The available findings mix outcome units, so charts should be read as directional evidence.
+function latestEventCount(events: AgentEvent[], agent: string, key: string) {
+  const match = [...events].reverse().find((event) => event.agent === agent && typeof event.payload[key] === "number")
+  return match ? Number(match.payload[key]) : 0
+}
 
-## Limitations
-The pipeline uses abstract-derived findings and needs full-text review for publication-grade synthesis.`
+function toDocumentCards(documents: UploadedDocument[]): UploadedDocumentCard[] {
+  return documents.map((document) => ({
+    source_id: document.source_id,
+    name: document.name,
+    kind: document.kind,
+    excerpt: document.excerpt,
+  }))
+}
 
-const CHART_SPECS: ChartSpec[] = [
-  {
-    template: "bar_comparison",
-    title: "Average extracted value by metric",
-    insight: "Reaction-time slowing has the highest extracted value in the fixture data.",
-    figure: {
-      data: [
-        {
-          type: "bar",
-          x: ["Reaction time", "Working memory", "Attention lapses", "Executive control"],
-          y: [18.5, -9.2, 6.8, -0.42],
-          marker: { color: ["#22d3ee", "#38bdf8", "#2dd4bf", "#64748b"] },
-          hovertemplate: "<b>%{x}</b><br>Value: %{y}<extra></extra>",
-        },
-      ],
-      layout: {
-        title: { text: "Average extracted value by metric", x: 0.02 },
-        xaxis: { gridcolor: "#111827" },
-        yaxis: { gridcolor: "#1f2937", zerolinecolor: "#475569" },
-      },
-    },
-  },
-  {
-    template: "timeline",
-    title: "Extracted values over publication time",
-    insight: "The fixture spans 2019 through 2023 across four extracted findings.",
-    figure: {
-      data: [
-        {
-          type: "scatter",
-          mode: "markers+lines",
-          x: [2019, 2020, 2021, 2023],
-          y: [18.5, -9.2, 6.8, -0.42],
-          marker: { color: "#22d3ee", size: 10 },
-          line: { color: "#0e7490", width: 2 },
-          hovertemplate: "Year: %{x}<br>Value: %{y}<extra></extra>",
-        },
-      ],
-      layout: {
-        title: { text: "Extracted values over publication time", x: 0.02 },
-        xaxis: { gridcolor: "#1f2937", dtick: 1 },
-        yaxis: { gridcolor: "#1f2937", zerolinecolor: "#475569" },
-      },
-    },
-  },
-]
+function toPaperCards(papers: SemanticScholarSource[]): ResearchSource[] {
+  return papers.map((paper) => ({
+    source_id: paper.source_id,
+    title: paper.title,
+    provider: paper.provider ?? "Research paper",
+    url: paper.url,
+    year: paper.year,
+    citationCount: paper.citation_count,
+    authors: paper.authors,
+  }))
+}
 
-const AGENT_EVENTS: AgentEvent[] = [
-  {
-    type: "node_start",
-    agent: "planner",
-    payload: { message: "Decomposing research question" },
-    timestamp: "2026-05-09T15:00:00.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "planner",
-    payload: { subqueries: ["sleep deprivation cognition", "sleep loss vigilance"] },
-    timestamp: "2026-05-09T15:00:04.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "discovery",
-    payload: { message: "Searching academic sources" },
-    timestamp: "2026-05-09T15:00:05.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "discovery",
-    payload: { total_papers: 247 },
-    timestamp: "2026-05-09T15:00:18.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "extractor",
-    payload: { message: "Extracting structured findings" },
-    timestamp: "2026-05-09T15:00:19.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "extractor",
-    payload: { total_findings: 1843 },
-    timestamp: "2026-05-09T15:01:02.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "analyst",
-    payload: { message: "Running aggregate and comparison tools" },
-    timestamp: "2026-05-09T15:01:03.000Z",
-  },
-  {
-    type: "tool_call",
-    agent: "analyst",
-    payload: { tool: "aggregate", findings_count: 1843 },
-    timestamp: "2026-05-09T15:01:06.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "analyst",
-    payload: { tools_run: ["aggregate", "compare"], result_keys: ["aggregate", "compare"] },
-    timestamp: "2026-05-09T15:01:22.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "critic",
-    payload: { message: "Reviewing analysis quality" },
-    timestamp: "2026-05-09T15:01:23.000Z",
-  },
-  {
-    type: "critic_decision",
-    agent: "critic",
-    payload: { decision: "approve", reasoning: "The analysis addresses the research question." },
-    timestamp: "2026-05-09T15:01:35.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "critic",
-    payload: { approved: true },
-    timestamp: "2026-05-09T15:01:36.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "visualizer",
-    payload: { message: "Rendering chart evidence" },
-    timestamp: "2026-05-09T15:01:37.000Z",
-  },
-  {
-    type: "chart_ready",
-    agent: "visualizer",
-    payload: { charts: 2, message: "Rendered chart evidence" },
-    timestamp: "2026-05-09T15:01:49.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "visualizer",
-    payload: { chart_count: 2 },
-    timestamp: "2026-05-09T15:01:50.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "reporter",
-    payload: { message: "Writing markdown report" },
-    timestamp: "2026-05-09T15:01:51.000Z",
-  },
-  {
-    type: "report_ready",
-    agent: "reporter",
-    payload: { length: REPORT_MARKDOWN.length, message: "Report ready" },
-    timestamp: "2026-05-09T15:02:12.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "reporter",
-    payload: {},
-    timestamp: "2026-05-09T15:02:13.000Z",
-  },
-  {
-    type: "error",
-    agent: "system",
-    payload: { message: "Example recoverable stream warning" },
-    timestamp: "2026-05-09T15:02:14.000Z",
-  },
-  {
-    type: "done",
-    agent: "system",
-    payload: { message: "Research complete" },
-    timestamp: "2026-05-09T15:02:15.000Z",
-  },
-]
+function toDatasetCards(datasets: DatasetSource[]): DatasetCard[] {
+  return datasets.map((dataset) => ({
+    source_id: dataset.source_id,
+    title: dataset.title,
+    provider: dataset.provider ?? "Dataset",
+    description: dataset.description,
+    url: dataset.url,
+    resourceCount: dataset.resource_count,
+    credibility: dataset.credibility,
+    latestYear: dataset.latest_year,
+  }))
+}
 
-const RESEARCH_SOURCES: ResearchSource[] = [
-  {
-    title: "Total sleep deprivation and sustained attention",
-    provider: "Semantic Scholar",
-    year: 2019,
-    citationCount: 142,
-    url: "https://www.semanticscholar.org/search?q=Total%20sleep%20deprivation%20and%20sustained%20attention",
-  },
-  {
-    title: "Sleep restriction and working memory in adults",
-    provider: "Semantic Scholar",
-    year: 2020,
-    citationCount: 96,
-    url: "https://www.semanticscholar.org/search?q=Sleep%20restriction%20and%20working%20memory%20in%20adults",
-  },
-  {
-    title: "Vigilance after overnight wakefulness",
-    provider: "Semantic Scholar",
-    year: 2021,
-    citationCount: 73,
-    url: "https://www.semanticscholar.org/search?q=Vigilance%20after%20overnight%20wakefulness",
-  },
-]
+function EmptyState() {
+  return (
+    <section className="rounded-lg border border-slate-800 bg-[#11151b] p-5">
+      <h2 className="text-sm font-semibold text-slate-100">Start a live research run</h2>
+      <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-400">
+        Ask a research question and DeepQuery will plan an evidence-first investigation, search scholarly and public
+        data sources, validate source quality, fact-check claims, build cautious scenarios, and write a grounded report.
+      </p>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {[
+          "Investigate labor, market, policy, technical, or academic questions with multi-source evidence.",
+          "Attach a draft only when you want the agent to refine or ground a paper you already have.",
+          "Use charts as evidence explainers, not decorative output.",
+        ].map((hint) => (
+          <div key={hint} className="rounded-md border border-slate-800 bg-slate-950/50 p-3 text-sm text-slate-300">
+            {hint}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 export function LayoutShell() {
+  const [query, setQuery] = useState("")
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [submittedQuery, setSubmittedQuery] = useState("")
+  const [events, setEvents] = useState<AgentEvent[]>([])
+  const [charts, setCharts] = useState<ChartSpec[]>([])
+  const [report, setReport] = useState("")
+  const [paperSources, setPaperSources] = useState<ResearchSource[]>([])
+  const [documentSources, setDocumentSources] = useState<UploadedDocumentCard[]>([])
+  const [datasetSources, setDatasetSources] = useState<DatasetCard[]>([])
+  const [status, setStatus] = useState<HeroStatus>("idle")
+  const [isRunning, setIsRunning] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null)
+  const [runEndedAt, setRunEndedAt] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const closedByUsRef = useRef(false)
+
+  function closeStream() {
+    if (eventSourceRef.current) {
+      closedByUsRef.current = true
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+  }
+
+  function resetWorkspace() {
+    closeStream()
+    setQuery("")
+    setSelectedFiles([])
+    setSubmittedQuery("")
+    setEvents([])
+    setCharts([])
+    setReport("")
+    setPaperSources([])
+    setDocumentSources([])
+    setDatasetSources([])
+    setStatus("idle")
+    setIsRunning(false)
+    setErrorMessage("")
+    setRunStartedAt(null)
+    setRunEndedAt(null)
+  }
+
+  function handleIncomingEvent(event: AgentEvent) {
+    startTransition(() => {
+      setEvents((current) => [...current, event])
+    })
+
+    if (event.type === "documents_ready") {
+      const documents = Array.isArray(event.payload.documents) ? (event.payload.documents as UploadedDocument[]) : []
+      setDocumentSources(toDocumentCards(documents))
+      return
+    }
+
+    if (event.type === "sources_ready") {
+      const papers = Array.isArray(event.payload.papers) ? (event.payload.papers as SemanticScholarSource[]) : []
+      setPaperSources(toPaperCards(papers))
+      return
+    }
+
+    if (event.type === "datasets_ready") {
+      const datasets = Array.isArray(event.payload.datasets) ? (event.payload.datasets as DatasetSource[]) : []
+      setDatasetSources(toDatasetCards(datasets))
+      return
+    }
+
+    if (event.type === "chart_ready") {
+      const nextCharts = Array.isArray(event.payload.chart_specs) ? (event.payload.chart_specs as ChartSpec[]) : []
+      setCharts(nextCharts)
+      return
+    }
+
+    if (event.type === "report_ready") {
+      setReport(asString(event.payload.report))
+      return
+    }
+
+    if (event.type === "error") {
+      setErrorMessage(asString(event.payload.message, "The run failed."))
+      setStatus("error")
+      setIsRunning(false)
+      setRunEndedAt(Date.now())
+      closeStream()
+      return
+    }
+
+    if (event.type === "done") {
+      setStatus("done")
+      setIsRunning(false)
+      setRunEndedAt(Date.now())
+      closeStream()
+    }
+  }
+
+  useEffect(() => {
+    if (!isRunning || !runStartedAt) return
+
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [isRunning, runStartedAt])
+
+  useEffect(() => () => closeStream(), [])
+
+  function handleFileSelection(event: ChangeEvent<HTMLInputElement>) {
+    const nextFiles = Array.from(event.target.files ?? [])
+    if (nextFiles.length === 0) return
+
+    setSelectedFiles((current) => {
+      const seen = new Set(current.map((file) => `${file.name}:${file.size}:${file.lastModified}`))
+      const merged = [...current]
+      for (const file of nextFiles) {
+        const key = `${file.name}:${file.size}:${file.lastModified}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          merged.push(file)
+        }
+      }
+      return merged
+    })
+    event.target.value = ""
+  }
+
+  function removeFile(target: File) {
+    setSelectedFiles((current) =>
+      current.filter(
+        (file) => !(file.name === target.name && file.size === target.size && file.lastModified === target.lastModified)
+      )
+    )
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const nextQuery = query.trim()
+    if (!nextQuery || isRunning) return
+
+    closeStream()
+    setSubmittedQuery(nextQuery)
+    setEvents([])
+    setCharts([])
+    setReport("")
+    setPaperSources([])
+    setDocumentSources([])
+    setDatasetSources([])
+    setErrorMessage("")
+    setStatus("running")
+    setIsRunning(true)
+    setRunStartedAt(Date.now())
+    setRunEndedAt(null)
+    setNow(Date.now())
+
+    const formData = new FormData()
+    formData.append("query", nextQuery)
+    for (const file of selectedFiles) {
+      formData.append("files", file)
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/investigations`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const failure = await response.text()
+        throw new Error(failure || "Could not start research run.")
+      }
+
+      const payload = (await response.json()) as { id?: string }
+      if (!payload.id) {
+        throw new Error("Server did not return a session id.")
+      }
+
+      closedByUsRef.current = false
+      const stream = new EventSource(`${API_BASE}/api/stream/${payload.id}`)
+      eventSourceRef.current = stream
+      stream.onmessage = (message) => {
+        try {
+          handleIncomingEvent(JSON.parse(message.data) as AgentEvent)
+        } catch {
+          // Ignore malformed events; the next event will usually recover the stream.
+        }
+      }
+      stream.onerror = () => {
+        if (closedByUsRef.current) {
+          return
+        }
+        setErrorMessage("The live event stream was interrupted.")
+        setStatus("error")
+        setIsRunning(false)
+        setRunEndedAt(Date.now())
+        closeStream()
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Could not start research run.")
+      setStatus("error")
+      setIsRunning(false)
+      setRunEndedAt(Date.now())
+    }
+  }
+
+  const findingsCount =
+    latestEventCount(events, "extractor", "total_findings") || latestEventCount(events, "extractor", "findings_extracted")
+  const averageCredibility = latestEventCount(events, "validator", "average_credibility")
+  const checkedClaims = latestEventCount(events, "factchecker", "checked_claims")
+  const metrics = [
+    { label: "Papers", value: paperSources.length.toString() },
+    { label: "Datasets", value: datasetSources.length.toString() },
+    { label: "Uploads", value: documentSources.length.toString() },
+    { label: "Findings", value: findingsCount.toLocaleString() },
+    { label: "Credibility", value: averageCredibility ? averageCredibility.toFixed(2) : "--" },
+    { label: "Claims checked", value: checkedClaims ? checkedClaims.toString() : "--" },
+    { label: "Charts", value: charts.length.toString() },
+    { label: "Duration", value: formatDuration(runStartedAt, runEndedAt, now) },
+  ]
+
+  const summary = errorMessage
+    ? errorMessage
+    : isRunning
+      ? "Streaming a live intelligence run: planning, source discovery, dataset validation, extraction, statistical analysis, causal synthesis, scenario modeling, fact-checking, and evidence-led visualization."
+      : report
+        ? "Live run complete. Review the intelligence report, validation-aware sources, scenario charts, and evidence trail below."
+        : "Submit a research prompt. Uploads are optional and are best used for drafts, papers, or source material you want the investigation to consider."
+
+  const topbarStatus = isRunning
+    ? "Streaming live run"
+    : errorMessage
+      ? "Run needs attention"
+      : report
+        ? "Last run complete"
+        : "Ready for prompt + files"
+
+  const canReset = Boolean(
+    query || selectedFiles.length > 0 || events.length > 0 || report || paperSources.length > 0 || documentSources.length > 0 || datasetSources.length > 0
+  )
+
   return (
     <div className="min-h-screen bg-[#0b0d10] text-slate-100">
-      <Topbar />
+      <Topbar onReset={resetWorkspace} canReset={canReset} status={topbarStatus} />
 
-      <div className="grid h-[calc(100svh-3.5rem)] grid-cols-1 overflow-hidden lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-slate-800 bg-[#0f1217] lg:block">
-          <div className="sticky top-14 flex h-[calc(100svh-3.5rem)] flex-col overflow-y-auto p-3">
-            <nav className="space-y-1" aria-label="Primary navigation">
-              {NAV_ITEMS.map((item, index) => (
-                <a
-                  key={item}
-                  href="#"
-                  className={`block rounded-md px-3 py-2 text-sm transition-colors ${
-                    index === 0
-                      ? "bg-cyan-400/10 text-cyan-200 ring-1 ring-cyan-400/20"
-                      : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
-                  }`}
+      <main className="min-w-0 bg-[#0b0d10]" aria-label="Main content">
+        <div className="mx-auto max-w-7xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+          <section className="rounded-lg border border-slate-800 bg-[#11151b] p-5">
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <label htmlFor="research-query" className="text-sm font-semibold text-slate-100">
+                  Research prompt
+                </label>
+                <textarea
+                  id="research-query"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Example: Compare retrieval-augmented generation evaluation methods for biomedical research assistants."
+                  className="min-h-[130px] w-full rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3 text-sm leading-7 text-slate-100 outline-none transition focus:border-cyan-500/60"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm text-slate-300 transition hover:border-cyan-500/50 hover:text-cyan-200">
+                  <FilePlus2 size={16} />
+                  Attach files
+                  <input type="file" multiple accept={ACCEPTED_FILES} className="hidden" onChange={handleFileSelection} />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={isRunning || !query.trim()}
+                  className="inline-flex items-center gap-2 rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
                 >
-                  {item}
-                </a>
-              ))}
-            </nav>
+                  <Play size={16} />
+                  {isRunning ? "Running..." : "Run research"}
+                </button>
 
-            <div className="mt-auto rounded-md border border-slate-800 bg-slate-950/50 p-3">
-              <div className="text-xs font-medium text-slate-300">System status</div>
-              <div className="mt-2 h-2 rounded-full bg-slate-800">
-                <div className="h-2 w-2/3 rounded-full bg-cyan-400" />
+                <button
+                  type="button"
+                  onClick={resetWorkspace}
+                  disabled={!canReset}
+                  className="inline-flex items-center gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm text-slate-300 transition hover:border-cyan-500/50 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RotateCcw size={16} />
+                  Clear
+                </button>
+
+                <span className="text-xs text-slate-500">Optional: PDF, DOCX, TXT, or Markdown context.</span>
               </div>
+
+              {selectedFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedFiles.map((file) => (
+                    <div
+                      key={`${file.name}-${file.size}-${file.lastModified}`}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-slate-950/60 px-3 py-1 text-xs text-slate-300"
+                    >
+                      <span>{file.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(file)}
+                        className="rounded-full text-slate-500 transition hover:text-slate-100"
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </form>
+          </section>
+
+          <HeroCard
+            status={status}
+            title={submittedQuery || "DeepQuery live research workspace"}
+            summary={summary}
+            metrics={metrics}
+          />
+
+          {report ? <KeyTakeaways markdown={report} /> : null}
+          {!events.length && !isRunning && !report ? <EmptyState /> : null}
+
+          <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-5">
+              <ChartsGrid charts={charts} />
+              {report ? (
+                <ReportSection markdown={report} />
+              ) : (
+                <section className="rounded-lg border border-slate-800 bg-[#11151b] p-5">
+                  <h2 className="text-sm font-semibold text-slate-100">Report</h2>
+                  <p className="mt-3 text-sm leading-7 text-slate-500">
+                    {isRunning ? "The report will stream in after analysis completes." : "No report generated yet."}
+                  </p>
+                </section>
+              )}
             </div>
-          </div>
-        </aside>
 
-        <main className="min-w-0 overflow-y-auto bg-[#0b0d10]" aria-label="Main content">
-          <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-            <HeroCard
-              status="running"
-              title="Sleep deprivation and cognitive performance"
-              summary="A structured research run comparing abstract-level findings across attention, working memory, vigilance, and executive-control outcomes."
-              metrics={HERO_METRICS}
+            <ResearchSidebar
+              events={events}
+              isRunning={isRunning}
+              sources={paperSources}
+              documents={documentSources}
+              datasets={datasetSources}
             />
-
-            <KeyTakeaways markdown={REPORT_MARKDOWN} />
-
-            <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-5">
-                <ChartsGrid charts={CHART_SPECS} />
-                <ReportSection markdown={REPORT_MARKDOWN} />
-              </div>
-              <ResearchSidebar events={AGENT_EVENTS} isRunning sources={RESEARCH_SOURCES} />
-            </section>
-          </div>
-        </main>
-      </div>
+          </section>
+        </div>
+      </main>
     </div>
   )
 }
