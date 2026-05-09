@@ -11,7 +11,9 @@ NUMBER_RE = re.compile(r"[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?")
 
 
 def _figure_dict(fig: go.Figure) -> dict:
-    return json.loads(json.dumps(fig.to_dict(), cls=PlotlyJSONEncoder))
+    payload = json.loads(json.dumps(fig.to_dict(), cls=PlotlyJSONEncoder))
+    payload.get("layout", {}).pop("template", None)
+    return payload
 
 
 def _number(value: Any) -> float | None:

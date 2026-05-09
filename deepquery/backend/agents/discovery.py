@@ -21,7 +21,7 @@ async def discovery_node(state: AgentState) -> dict:
             payload={"tool": "semantic_scholar_search", "query": sq}
         ))
         try:
-            papers = await search_papers(sq, limit=6)
+            papers = await search_papers(sq, limit=4)
             new = 0
             for p in papers:
                 key = p["paper_id"] or p["title"]
@@ -38,7 +38,7 @@ async def discovery_node(state: AgentState) -> dict:
                 type="error", agent="discovery",
                 payload={"message": f"Search failed for '{sq}': {exc}"}
             ))
-        await asyncio.sleep(0.4)  # Semantic Scholar free tier rate limit
+        await asyncio.sleep(1.2)  # Semantic Scholar free tier rate limit
 
     await emit(sid, AgentEvent(
         type="node_end", agent="discovery",
