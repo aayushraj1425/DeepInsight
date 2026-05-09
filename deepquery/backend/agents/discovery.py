@@ -28,12 +28,7 @@ async def discovery_node(state: AgentState) -> dict:
         try:
             scholar_papers = await search_papers(sq, limit=6)
         except Exception:
-            # Rate-limited or network error — fall through to web search silently
-            await emit(sid, AgentEvent(
-                type="tool_call", agent="discovery",
-                payload={"tool": "web_search_fallback", "query": sq,
-                         "reason": "Semantic Scholar rate limited — switching to web search"}
-            ))
+            pass  # Rate-limited or network error — fall through to web search
 
         if scholar_papers:
             new = 0
