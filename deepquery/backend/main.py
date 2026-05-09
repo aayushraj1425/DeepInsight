@@ -1,7 +1,14 @@
 import asyncio
+import sys
 import uuid
+from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv()
+
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+load_dotenv(BACKEND_DIR / ".env")
 
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,12 +24,8 @@ app = FastAPI(title="DeepQuery")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-    ],
+    allow_origins=[],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):517[0-9]$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +36,15 @@ graph = build_graph()
 
 class InvestigationRequest(BaseModel):
     query: str
+
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
+
+
+def sse_data(event: AgentEvent) -> str:
+    return f"data: {event.model_dump_json()}\n\n"
 
 
 async def run_pipeline(session_id: str, query: str) -> None:
@@ -81,7 +93,11 @@ async def stream_events(session_id: str):
     q = get_queue(session_id)
     if q is None:
         async def not_found():
-            yield 'data: {"type":"error","agent":"system","payload":{"message":"session not found"},"timestamp":""}\n\n'
+            yield sse_data(AgentEvent(
+                type="error",
+                agent="system",
+                payload={"message": "session not found"},
+            ))
         return StreamingResponse(not_found(), media_type="text/event-stream")
 
     async def event_generator():
@@ -90,9 +106,13 @@ async def stream_events(session_id: str):
                 event = await asyncio.wait_for(q.get(), timeout=120.0)
                 if event is None:
                     break
-                yield f"data: {event.model_dump_json()}\n\n"
+                yield sse_data(event)
         except asyncio.TimeoutError:
-            yield 'data: {"type":"error","agent":"system","payload":{"message":"stream timeout"},"timestamp":""}\n\n'
+            yield sse_data(AgentEvent(
+                type="error",
+                agent="system",
+                payload={"message": "stream timeout"},
+            ))
         finally:
             remove_session(session_id)
 

@@ -15,3 +15,16 @@ export interface AgentEvent {
   payload: Record<string, unknown>
   timestamp: string
 }
+
+export interface PlotlyFigure {
+  data?: unknown[]
+  layout?: Record<string, unknown>
+  config?: Record<string, unknown>
+}
+
+export interface ChartSpec {
+  template?: string
+  title?: string
+  insight?: string
+  figure?: PlotlyFigure
+}

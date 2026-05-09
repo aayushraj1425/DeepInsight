@@ -1,20 +1,12 @@
-import Plot from "react-plotly.js"
+import _Plot from "react-plotly.js"
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const Plot = ((_Plot as any).default ?? _Plot) as typeof _Plot
 import type { Config, Data, Layout } from "plotly.js"
 import { BarChart3 } from "lucide-react"
 import { cn } from "../lib/utils"
+import type { ChartSpec } from "../types/events"
 
-export interface PlotlyFigure {
-  data?: unknown[]
-  layout?: Record<string, unknown>
-  config?: Record<string, unknown>
-}
-
-export interface ChartSpec {
-  template?: string
-  title?: string
-  insight?: string
-  figure?: PlotlyFigure
-}
+export type { ChartSpec, PlotlyFigure } from "../types/events"
 
 interface Props {
   chart: ChartSpec
