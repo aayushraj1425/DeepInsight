@@ -83,17 +83,17 @@ async def _extract_one(paper: dict) -> list[dict]:
                 {
                     "role": "system",
                     "content": (
-                        "You are a parser, not a researcher. The paper text below already contains the numbers.\n\n"
-                        "Your ONLY job is to locate numeric findings that are explicitly written in the text "
-                        "and copy them out exactly as structured data.\n\n"
+                        "You are a parser. The paper text already contains the data — locate and copy it out.\n\n"
+                        "Extract numeric findings: percentages, counts, scores, effect sizes, p-values, "
+                        "dollar amounts, durations, ratios — any explicit number tied to a result.\n\n"
                         "ABSOLUTE RULES:\n"
                         "1. Every number in a finding MUST appear verbatim in the source text — do not estimate, "
                         "round, or infer.\n"
                         "2. `source_quote` MUST be a word-for-word copy of the sentence containing the number. "
                         "Do not paraphrase or shorten.\n"
-                        "3. If the text contains no explicit numeric results, return an empty list. "
-                        "An empty list is the correct answer when there are no numbers.\n"
-                        "4. Qualitative words ('majority', 'significant', 'improved') are NOT numbers — skip them.\n"
+                        "3. If the text has no explicit numeric results, return an empty list. "
+                        "An empty list is correct when there are no numbers.\n"
+                        "4. Do not convert qualitative words ('majority', 'most', 'significant') into numbers.\n"
                         "5. Do not invent, estimate, or extrapolate any value."
                     ),
                 },
