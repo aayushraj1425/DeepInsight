@@ -51,12 +51,12 @@ def _ci_bounds(ci: Any, value: float) -> tuple[float, float] | None:
 
 def _base_layout(title: str) -> dict:
     return {
-        "title": {"text": title, "x": 0.02, "font": {"size": 16}},
-        "font": {"color": "#e5e7eb", "family": "Inter, ui-sans-serif, system-ui"},
-        "paper_bgcolor": "#111111",
-        "plot_bgcolor": "#111111",
+        "title": {"text": title, "x": 0.02, "font": {"size": 16, "color": "#1A1A1A", "family": "Young Serif, Georgia, serif"}},
+        "font": {"color": "#666666", "family": "Inter, ui-sans-serif, system-ui"},
+        "paper_bgcolor": "#FFFFFF",
+        "plot_bgcolor": "#F5F5F5",
         "margin": {"l": 72, "r": 28, "t": 58, "b": 56},
-        "hoverlabel": {"bgcolor": "#111827", "font": {"color": "#f9fafb"}},
+        "hoverlabel": {"bgcolor": "#1A1A1A", "font": {"color": "#FFFFFF"}},
     }
 
 
@@ -119,7 +119,7 @@ def forest_plot(findings: list[dict]) -> tuple[dict, str]:
         "x": values,
         "y": labels,
         "mode": "markers",
-        "marker": {"size": 10, "color": "#38bdf8", "line": {"color": "#bae6fd", "width": 1}},
+        "marker": {"size": 10, "color": "#E25A3D", "line": {"color": "#FFEDD5", "width": 1}},
         "hovertemplate": hover,
         "orientation": "h",
     }
@@ -136,8 +136,8 @@ def forest_plot(findings: list[dict]) -> tuple[dict, str]:
     fig = go.Figure(data=[go.Scatter(**trace)])
     fig.update_layout(
         **_base_layout("Effect estimates across extracted findings"),
-        xaxis={"title": "Extracted numeric value", "gridcolor": "#1f2937", "zerolinecolor": "#4b5563"},
-        yaxis={"autorange": "reversed", "gridcolor": "#111111"},
+        xaxis={"title": "Extracted numeric value", "gridcolor": "#E5E7EB", "zerolinecolor": "#9CA3AF"},
+        yaxis={"autorange": "reversed", "gridcolor": "#F5F5F5"},
         height=max(360, 92 + len(rows) * 34),
     )
 
@@ -163,16 +163,16 @@ def bar_comparison(compare_result: dict) -> tuple[dict, str]:
         go.Bar(
             x=labels,
             y=values,
-            marker={"color": "#22c55e", "line": {"color": "#bbf7d0", "width": 1}},
-            error_y={"type": "data", "array": errors, "visible": any(e > 0 for e in errors), "color": "#86efac"},
+            marker={"color": "#E25A3D", "line": {"color": "#FFEDD5", "width": 1}},
+            error_y={"type": "data", "array": errors, "visible": any(e > 0 for e in errors), "color": "#9CA3AF"},
             customdata=counts,
             hovertemplate="<b>%{x}</b><br>Average: %{y:.3f}<br>Studies: %{customdata}<extra></extra>",
         )
     ])
     fig.update_layout(
         **_base_layout(f"Average extracted value by {group_by}"),
-        xaxis={"title": str(group_by).replace("_", " "), "gridcolor": "#111111"},
-        yaxis={"title": "Average numeric value", "gridcolor": "#1f2937", "zerolinecolor": "#4b5563"},
+        xaxis={"title": str(group_by).replace("_", " "), "gridcolor": "#F5F5F5"},
+        yaxis={"title": "Average numeric value", "gridcolor": "#E5E7EB", "zerolinecolor": "#9CA3AF"},
         height=360,
     )
 
@@ -206,8 +206,8 @@ def timeline(findings: list[dict]) -> tuple[dict, str]:
             marker={
                 "size": sizes,
                 "color": values,
-                "colorscale": [[0, "#f97316"], [0.5, "#eab308"], [1, "#14b8a6"]],
-                "line": {"color": "#f9fafb", "width": 0.8},
+                "colorscale": [[0, "#FFEDD5"], [0.5, "#E25A3D"], [1, "#1A1A1A"]],
+                "line": {"color": "#666666", "width": 0.8},
                 "showscale": False,
             },
             text=metrics,
@@ -217,8 +217,8 @@ def timeline(findings: list[dict]) -> tuple[dict, str]:
     ])
     fig.update_layout(
         **_base_layout("Extracted values over publication time"),
-        xaxis={"title": "Publication year", "gridcolor": "#1f2937"},
-        yaxis={"title": "Extracted numeric value", "gridcolor": "#1f2937", "zerolinecolor": "#4b5563"},
+        xaxis={"title": "Publication year", "gridcolor": "#E5E7EB"},
+        yaxis={"title": "Extracted numeric value", "gridcolor": "#E5E7EB", "zerolinecolor": "#9CA3AF"},
         height=360,
     )
 

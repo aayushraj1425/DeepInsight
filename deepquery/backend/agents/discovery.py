@@ -3,27 +3,39 @@ from agents.state import AgentState
 from events import AgentEvent
 from runtime import emit
 from tools.papers import search_papers
+from tools.web_search import web_search, enrich_web_results
 
 
 async def discovery_node(state: AgentState) -> dict:
     sid = state["session_id"]
     await emit(sid, AgentEvent(
         type="node_start", agent="discovery",
-        payload={"message": f"Searching Semantic Scholar for {len(state['subqueries'])} subqueries..."}
+        payload={"message": f"Searching for {len(state['subqueries'])} subqueries..."}
     ))
 
-    seen: set[str] = set()
-    all_papers: list[dict] = []
+    # Preserve file-ingestor papers already in state
+    existing = state.get("papers") or []
+    seen: set[str] = set(p.get("paper_id") or p["title"] for p in existing)
+    all_papers: list[dict] = list(existing)
 
     for sq in state["subqueries"]:
         await emit(sid, AgentEvent(
             type="tool_call", agent="discovery",
             payload={"tool": "semantic_scholar_search", "query": sq}
         ))
+
+        scholar_papers = []
         try:
-            papers = await search_papers(sq, limit=4)
+            scholar_papers = await search_papers(sq, limit=6)
+        except Exception as exc:
+            await emit(sid, AgentEvent(
+                type="error", agent="discovery",
+                payload={"message": f"Semantic Scholar failed for '{sq}': {exc}"}
+            ))
+
+        if scholar_papers:
             new = 0
-            for p in papers:
+            for p in scholar_papers:
                 key = p["paper_id"] or p["title"]
                 if key not in seen:
                     seen.add(key)
@@ -31,14 +43,30 @@ async def discovery_node(state: AgentState) -> dict:
                     new += 1
             await emit(sid, AgentEvent(
                 type="tool_result", agent="discovery",
-                payload={"query": sq, "found": len(papers), "new": new}
+                payload={"source": "semantic_scholar", "query": sq, "found": len(scholar_papers), "new": new}
             ))
-        except Exception as exc:
+        else:
+            # Fallback: web search + fetch full page content
             await emit(sid, AgentEvent(
-                type="error", agent="discovery",
-                payload={"message": f"Search failed for '{sq}': {exc}"}
+                type="tool_call", agent="discovery",
+                payload={"tool": "web_search", "query": sq}
             ))
-        await asyncio.sleep(1.2)  # Semantic Scholar free tier rate limit
+            raw_web = web_search(sq, max_results=6)
+            web_papers = await enrich_web_results(raw_web)
+
+            new = 0
+            for p in web_papers:
+                key = p["paper_id"] or p["title"]
+                if key not in seen:
+                    seen.add(key)
+                    all_papers.append(p)
+                    new += 1
+            await emit(sid, AgentEvent(
+                type="tool_result", agent="discovery",
+                payload={"source": "web_search", "query": sq, "found": len(web_papers), "new": new}
+            ))
+
+        await asyncio.sleep(1.0)
 
     await emit(sid, AgentEvent(
         type="node_end", agent="discovery",

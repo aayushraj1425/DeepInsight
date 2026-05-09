@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 from pydantic import BaseModel, Field
 from agents.state import AgentState
@@ -22,6 +23,41 @@ class PaperFindings(BaseModel):
     )
 
 
+async def _extract_one(paper: dict) -> list[dict]:
+    if not paper.get("abstract"):
+        return []
+    try:
+        result: PaperFindings = await client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Extract every quantitative finding from this text. "
+                        "Include explicit numbers (23%, $120K, 1.5x) AND reasonable numeric estimates "
+                        "from qualitative statements (e.g. 'majority' → '~65%', 'significant growth' → estimate a %). "
+                        "For web articles without explicit stats, estimate plausible values from context and mark them with '~'. "
+                        "Only return an empty list if the text contains absolutely no measurable claims."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Title: {paper['title']}\n\nAbstract: {paper['abstract']}",
+                },
+            ],
+            response_model=PaperFindings,
+        )
+        rows = []
+        for f in result.findings:
+            row = f.model_dump()
+            row["paper_title"] = paper["title"]
+            row["year"] = paper.get("year")
+            rows.append(row)
+        return rows
+    except Exception:
+        return []
+
+
 async def extractor_node(state: AgentState) -> dict:
     sid = state["session_id"]
     papers = state["papers"]
@@ -31,37 +67,8 @@ async def extractor_node(state: AgentState) -> dict:
         payload={"message": f"Extracting structured findings from {len(papers)} papers..."}
     ))
 
-    all_findings: list[dict] = []
-
-    for paper in papers:
-        if not paper.get("abstract"):
-            continue
-        try:
-            result: PaperFindings = await client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Extract every quantitative finding from this research abstract. "
-                            "Only extract results that include actual numeric values. "
-                            "Return an empty list if the abstract has no numeric results."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Title: {paper['title']}\n\nAbstract: {paper['abstract']}",
-                    },
-                ],
-                response_model=PaperFindings,
-            )
-            for f in result.findings:
-                row = f.model_dump()
-                row["paper_title"] = paper["title"]
-                row["year"] = paper.get("year")
-                all_findings.append(row)
-        except Exception:
-            continue  # skip papers that fail; don't abort the pipeline
+    results = await asyncio.gather(*[_extract_one(p) for p in papers])
+    all_findings = [finding for paper_findings in results for finding in paper_findings]
 
     await emit(sid, AgentEvent(
         type="tool_result", agent="extractor",

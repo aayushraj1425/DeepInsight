@@ -5,6 +5,7 @@ class AgentState(TypedDict):
     session_id: str
     query: str
     subqueries: list[str]
+    uploaded_docs: list[dict]   # [{filename, chunks: [{title, abstract, ...}]}]
     papers: list[dict]
     findings: list[dict]
     analysis: dict

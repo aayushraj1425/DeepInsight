@@ -1,12 +1,18 @@
 import { ArrowLeft, Download, Share2 } from "lucide-react"
 
-export function Topbar() {
+interface TopbarProps {
+  onBack?: () => void
+}
+
+export function Topbar({ onBack }: TopbarProps) {
   return (
-    <header className="sticky top-0 z-40 h-14 border-b border-slate-800 bg-[#0b0d10]/95 backdrop-blur">
+    <header className="sticky top-0 z-40 h-14 border-b border-[#E5E7EB] bg-brand-background/95 backdrop-blur">
       <div className="flex h-full items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <button
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-800 text-slate-400 transition-colors hover:border-cyan-500/50 hover:text-cyan-200"
+            onClick={onBack}
+            disabled={!onBack}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#E5E7EB] text-brand-muted transition-colors hover:border-brand-accent/50 hover:text-brand-accent disabled:opacity-30 disabled:cursor-default"
             aria-label="Go back"
             title="Go back"
             type="button"
@@ -15,19 +21,19 @@ export function Topbar() {
           </button>
 
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-cyan-400 text-[11px] font-extrabold text-slate-950">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-accent text-[11px] font-extrabold text-white">
               DQ
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold leading-4 tracking-tight">DeepQuery</div>
-              <div className="truncate text-[11px] leading-4 text-slate-500">Research workspace</div>
+              <div className="truncate text-sm font-semibold leading-4 tracking-tight text-brand-ink">DeepQuery</div>
+              <div className="truncate text-[11px] leading-4 text-brand-muted">Research workspace</div>
             </div>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
           <button
-            className="flex h-8 items-center gap-2 rounded-md border border-slate-800 px-3 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:text-cyan-200"
+            className="flex h-8 items-center gap-2 rounded-md border border-[#E5E7EB] px-3 text-xs font-medium text-brand-muted transition-colors hover:border-brand-accent/50 hover:text-brand-accent"
             title="Download"
             type="button"
           >
@@ -35,7 +41,7 @@ export function Topbar() {
             <span className="hidden sm:inline">Download</span>
           </button>
           <button
-            className="flex h-8 items-center gap-2 rounded-md border border-slate-800 px-3 text-xs font-medium text-slate-300 transition-colors hover:border-cyan-500/50 hover:text-cyan-200"
+            className="flex h-8 items-center gap-2 rounded-md border border-[#E5E7EB] px-3 text-xs font-medium text-brand-muted transition-colors hover:border-brand-accent/50 hover:text-brand-accent"
             title="Share"
             type="button"
           >

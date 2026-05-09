@@ -4,6 +4,20 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      colors: {
+        brand: {
+          background: '#FDFDFD',
+          surface: '#F5F5F5',
+          ink: '#1A1A1A',
+          muted: '#666666',
+          accent: '#E25A3D',
+          highlight: '#FFEDD5',
+        },
+      },
+      fontFamily: {
+        serif: ['"Young Serif"', 'serif'],
+        sans: ['"Inter"', 'sans-serif'],
+      },
       animation: {
         "slide-in": "slideIn 0.2s ease-out",
         "pulse-dot": "pulseDot 1.4s ease-in-out infinite",

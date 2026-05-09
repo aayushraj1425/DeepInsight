@@ -1,4 +1,5 @@
-import type { AgentEvent, ChartSpec } from "../../types/events"
+import { useState, useRef } from "react"
+import type { ChartSpec, AgentEvent } from "../../types/events"
 import { ChartsGrid } from "./ChartsGrid"
 import { HeroCard } from "./HeroCard"
 import { KeyTakeaways } from "./KeyTakeaways"
@@ -6,278 +7,194 @@ import { ResearchSidebar } from "./ResearchSidebar"
 import type { ResearchSource } from "./ResearchSources"
 import { ReportSection } from "./ReportSection"
 import { Topbar } from "./Topbar"
+import { InputView } from "./InputView"
 
 const NAV_ITEMS = ["Dashboard", "Runs", "Agents", "Reports", "Settings"]
 
-const HERO_METRICS = [
-  { label: "Papers", value: "247" },
-  { label: "Findings", value: "1,843" },
-  { label: "Tools", value: "6" },
-  { label: "Charts", value: "3" },
-  { label: "Duration", value: "4m 12s" },
-]
-
-const REPORT_MARKDOWN = `# Research Report
-
-## Bottom line
-Sleep deprivation is associated with worse cognitive performance across extracted abstract-level findings.
-
-## Evidence
-- Reaction time and vigilance outcomes show the clearest deterioration signals.
-- Working-memory accuracy trends downward after restricted sleep.
-- Executive-control measures decline after acute sleep loss.
-- The available findings mix outcome units, so charts should be read as directional evidence.
-
-## Limitations
-The pipeline uses abstract-derived findings and needs full-text review for publication-grade synthesis.`
-
-const CHART_SPECS: ChartSpec[] = [
-  {
-    template: "bar_comparison",
-    title: "Average extracted value by metric",
-    insight: "Reaction-time slowing has the highest extracted value in the fixture data.",
-    figure: {
-      data: [
-        {
-          type: "bar",
-          x: ["Reaction time", "Working memory", "Attention lapses", "Executive control"],
-          y: [18.5, -9.2, 6.8, -0.42],
-          marker: { color: ["#22d3ee", "#38bdf8", "#2dd4bf", "#64748b"] },
-          hovertemplate: "<b>%{x}</b><br>Value: %{y}<extra></extra>",
-        },
-      ],
-      layout: {
-        title: { text: "Average extracted value by metric", x: 0.02 },
-        xaxis: { gridcolor: "#111827" },
-        yaxis: { gridcolor: "#1f2937", zerolinecolor: "#475569" },
-      },
-    },
-  },
-  {
-    template: "timeline",
-    title: "Extracted values over publication time",
-    insight: "The fixture spans 2019 through 2023 across four extracted findings.",
-    figure: {
-      data: [
-        {
-          type: "scatter",
-          mode: "markers+lines",
-          x: [2019, 2020, 2021, 2023],
-          y: [18.5, -9.2, 6.8, -0.42],
-          marker: { color: "#22d3ee", size: 10 },
-          line: { color: "#0e7490", width: 2 },
-          hovertemplate: "Year: %{x}<br>Value: %{y}<extra></extra>",
-        },
-      ],
-      layout: {
-        title: { text: "Extracted values over publication time", x: 0.02 },
-        xaxis: { gridcolor: "#1f2937", dtick: 1 },
-        yaxis: { gridcolor: "#1f2937", zerolinecolor: "#475569" },
-      },
-    },
-  },
-]
-
-const AGENT_EVENTS: AgentEvent[] = [
-  {
-    type: "node_start",
-    agent: "planner",
-    payload: { message: "Decomposing research question" },
-    timestamp: "2026-05-09T15:00:00.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "planner",
-    payload: { subqueries: ["sleep deprivation cognition", "sleep loss vigilance"] },
-    timestamp: "2026-05-09T15:00:04.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "discovery",
-    payload: { message: "Searching academic sources" },
-    timestamp: "2026-05-09T15:00:05.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "discovery",
-    payload: { total_papers: 247 },
-    timestamp: "2026-05-09T15:00:18.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "extractor",
-    payload: { message: "Extracting structured findings" },
-    timestamp: "2026-05-09T15:00:19.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "extractor",
-    payload: { total_findings: 1843 },
-    timestamp: "2026-05-09T15:01:02.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "analyst",
-    payload: { message: "Running aggregate and comparison tools" },
-    timestamp: "2026-05-09T15:01:03.000Z",
-  },
-  {
-    type: "tool_call",
-    agent: "analyst",
-    payload: { tool: "aggregate", findings_count: 1843 },
-    timestamp: "2026-05-09T15:01:06.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "analyst",
-    payload: { tools_run: ["aggregate", "compare"], result_keys: ["aggregate", "compare"] },
-    timestamp: "2026-05-09T15:01:22.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "critic",
-    payload: { message: "Reviewing analysis quality" },
-    timestamp: "2026-05-09T15:01:23.000Z",
-  },
-  {
-    type: "critic_decision",
-    agent: "critic",
-    payload: { decision: "approve", reasoning: "The analysis addresses the research question." },
-    timestamp: "2026-05-09T15:01:35.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "critic",
-    payload: { approved: true },
-    timestamp: "2026-05-09T15:01:36.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "visualizer",
-    payload: { message: "Rendering chart evidence" },
-    timestamp: "2026-05-09T15:01:37.000Z",
-  },
-  {
-    type: "chart_ready",
-    agent: "visualizer",
-    payload: { charts: 2, message: "Rendered chart evidence" },
-    timestamp: "2026-05-09T15:01:49.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "visualizer",
-    payload: { chart_count: 2 },
-    timestamp: "2026-05-09T15:01:50.000Z",
-  },
-  {
-    type: "node_start",
-    agent: "reporter",
-    payload: { message: "Writing markdown report" },
-    timestamp: "2026-05-09T15:01:51.000Z",
-  },
-  {
-    type: "report_ready",
-    agent: "reporter",
-    payload: { length: REPORT_MARKDOWN.length, message: "Report ready" },
-    timestamp: "2026-05-09T15:02:12.000Z",
-  },
-  {
-    type: "node_end",
-    agent: "reporter",
-    payload: {},
-    timestamp: "2026-05-09T15:02:13.000Z",
-  },
-  {
-    type: "error",
-    agent: "system",
-    payload: { message: "Example recoverable stream warning" },
-    timestamp: "2026-05-09T15:02:14.000Z",
-  },
-  {
-    type: "done",
-    agent: "system",
-    payload: { message: "Research complete" },
-    timestamp: "2026-05-09T15:02:15.000Z",
-  },
-]
-
-const RESEARCH_SOURCES: ResearchSource[] = [
-  {
-    title: "Total sleep deprivation and sustained attention",
-    provider: "Semantic Scholar",
-    year: 2019,
-    citationCount: 142,
-    url: "https://www.semanticscholar.org/search?q=Total%20sleep%20deprivation%20and%20sustained%20attention",
-  },
-  {
-    title: "Sleep restriction and working memory in adults",
-    provider: "Semantic Scholar",
-    year: 2020,
-    citationCount: 96,
-    url: "https://www.semanticscholar.org/search?q=Sleep%20restriction%20and%20working%20memory%20in%20adults",
-  },
-  {
-    title: "Vigilance after overnight wakefulness",
-    provider: "Semantic Scholar",
-    year: 2021,
-    citationCount: 73,
-    url: "https://www.semanticscholar.org/search?q=Vigilance%20after%20overnight%20wakefulness",
-  },
-]
+function latestAgentEvent(events: AgentEvent[], agent: string, type: string) {
+  return [...events].reverse().find((e) => e.agent === agent && e.type === type) ?? null
+}
 
 export function LayoutShell() {
+  const [isInputMode, setIsInputMode] = useState(true)
+  const [isExiting, setIsExiting] = useState(false)
+  const [query, setQuery] = useState("")
+  const [charts, setCharts] = useState<ChartSpec[]>([])
+  const [report, setReport] = useState<string>("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [sources] = useState<ResearchSource[]>([])
+  const [events, setEvents] = useState<AgentEvent[]>([])
+  const esRef = useRef<EventSource | null>(null)
+
+  const plannerEnd = latestAgentEvent(events, "planner", "node_end")
+  const discoveryEnd = latestAgentEvent(events, "discovery", "node_end")
+  const extractorEnd = latestAgentEvent(events, "extractor", "node_end")
+  const analystEnd = latestAgentEvent(events, "analyst", "node_end")
+
+  const canonicalQuestion = (plannerEnd?.payload.canonical_question as string | undefined) ?? query
+
+  const lastMessage = [...events].reverse().find(
+    (e) => typeof e.payload.message === "string"
+  )?.payload.message as string | undefined
+
+  const metrics = [
+    { label: "Papers", value: String((discoveryEnd?.payload.total_papers as number) ?? 0) },
+    { label: "Findings", value: String((extractorEnd?.payload.total_findings as number) ?? 0) },
+    { label: "Tools", value: String(Array.isArray(analystEnd?.payload.tools_run) ? (analystEnd!.payload.tools_run as unknown[]).length : 0) },
+    { label: "Charts", value: String(charts.length) },
+  ]
+
+  const handleAnalyze = async (q: string, files: File[]) => {
+    setIsExiting(true)
+    await new Promise<void>((resolve) => setTimeout(resolve, 320))
+
+    setQuery(q)
+    setIsInputMode(false)
+    setIsExiting(false)
+    setIsLoading(true)
+    setCharts([])
+    setReport("")
+    setEvents([])
+
+    esRef.current?.close()
+
+    try {
+      // Upload files first (if any), get back a pre-created session_id
+      let uploadedSessionId: string | null = null
+      if (files.length > 0) {
+        const formData = new FormData()
+        files.forEach((f) => formData.append("files", f))
+        const uploadRes = await fetch("http://127.0.0.1:8000/api/upload", {
+          method: "POST",
+          body: formData,
+        })
+        const uploadData = await uploadRes.json()
+        uploadedSessionId = uploadData.session_id
+      }
+
+      const res = await fetch("http://127.0.0.1:8000/api/investigations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, session_id: uploadedSessionId }),
+      })
+      const data = await res.json()
+      const sessionId = data.id
+
+      const es = new EventSource(`http://127.0.0.1:8000/api/stream/${sessionId}`)
+      esRef.current = es
+
+      es.onmessage = (e) => {
+        const event = JSON.parse(e.data) as AgentEvent
+        setEvents((prev) => [...prev, event])
+
+        if (event.type === "chart_ready") {
+          setCharts((event.payload.chart_specs as ChartSpec[]) || [])
+        } else if (event.type === "report_ready") {
+          setReport((event.payload.report as string) || "")
+        } else if (event.type === "done") {
+          setIsLoading(false)
+          es.close()
+        } else if (event.type === "error" && event.agent === "system") {
+          setIsLoading(false)
+          es.close()
+        }
+      }
+
+      es.onerror = () => {
+        setIsLoading(false)
+        es.close()
+      }
+    } catch (err) {
+      console.error(err)
+      setIsLoading(false)
+    }
+  }
+
+  const handleBack = () => {
+    esRef.current?.close()
+    setIsLoading(false)
+    setIsInputMode(true)
+  }
+
   return (
-    <div className="min-h-screen bg-[#0b0d10] text-slate-100">
-      <Topbar />
+    <div className="min-h-screen bg-brand-background text-brand-ink relative font-sans">
+      <div className="relative z-10">
+        <Topbar onBack={isInputMode ? undefined : handleBack} />
 
-      <div className="grid h-[calc(100svh-3.5rem)] grid-cols-1 overflow-hidden lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-slate-800 bg-[#0f1217] lg:block">
-          <div className="sticky top-14 flex h-[calc(100svh-3.5rem)] flex-col overflow-y-auto p-3">
-            <nav className="space-y-1" aria-label="Primary navigation">
-              {NAV_ITEMS.map((item, index) => (
-                <a
-                  key={item}
-                  href="#"
-                  className={`block rounded-md px-3 py-2 text-sm transition-colors ${
-                    index === 0
-                      ? "bg-cyan-400/10 text-cyan-200 ring-1 ring-cyan-400/20"
-                      : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-100"
-                  }`}
-                >
-                  {item}
-                </a>
-              ))}
-            </nav>
+        <div className={`grid h-[calc(100svh-3.5rem)] grid-cols-1 overflow-hidden ${!isInputMode ? "lg:grid-cols-[240px_minmax(0,1fr)]" : ""}`}>
+          <aside className={`border-r border-[#E5E7EB] bg-brand-surface ${isInputMode ? "hidden" : "hidden lg:block"}`}>
+            <div className="sticky top-14 flex h-[calc(100svh-3.5rem)] flex-col overflow-y-auto p-4">
+              <nav className="space-y-1" aria-label="Primary navigation">
+                {NAV_ITEMS.map((item, index) => (
+                  <a
+                    key={item}
+                    href="#"
+                    className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                      index === 0
+                        ? "bg-brand-highlight text-brand-accent"
+                        : "text-brand-muted hover:bg-brand-highlight/60 hover:text-brand-ink"
+                    }`}
+                  >
+                    {item}
+                  </a>
+                ))}
+              </nav>
 
-            <div className="mt-auto rounded-md border border-slate-800 bg-slate-950/50 p-3">
-              <div className="text-xs font-medium text-slate-300">System status</div>
-              <div className="mt-2 h-2 rounded-full bg-slate-800">
-                <div className="h-2 w-2/3 rounded-full bg-cyan-400" />
+              <div className="mt-auto rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)]">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-xs font-semibold text-brand-ink uppercase tracking-wider">System status</div>
+                  <div className="h-2 w-2 rounded-full bg-brand-accent animate-pulse" />
+                </div>
+                <div className="h-1.5 rounded-full bg-[#E5E7EB] overflow-hidden">
+                  <div className="h-full w-2/3 rounded-full bg-brand-accent" />
+                </div>
               </div>
             </div>
-          </div>
-        </aside>
+          </aside>
 
-        <main className="min-w-0 overflow-y-auto bg-[#0b0d10]" aria-label="Main content">
-          <div className="mx-auto max-w-6xl space-y-5 px-4 py-5 sm:px-6 lg:px-8">
-            <HeroCard
-              status="running"
-              title="Sleep deprivation and cognitive performance"
-              summary="A structured research run comparing abstract-level findings across attention, working memory, vigilance, and executive-control outcomes."
-              metrics={HERO_METRICS}
-            />
-
-            <KeyTakeaways markdown={REPORT_MARKDOWN} />
-
-            <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="space-y-5">
-                <ChartsGrid charts={CHART_SPECS} />
-                <ReportSection markdown={REPORT_MARKDOWN} />
+          <main className="min-w-0 overflow-y-auto bg-brand-background" aria-label="Main content">
+            {isInputMode ? (
+              <div
+                className="h-full transition-all duration-300 ease-in"
+                style={isExiting ? { opacity: 0, transform: "translateY(-20px)" } : { opacity: 1, transform: "translateY(0)" }}
+              >
+                <InputView onAnalyze={handleAnalyze} />
               </div>
-              <ResearchSidebar events={AGENT_EVENTS} isRunning sources={RESEARCH_SOURCES} />
-            </section>
-          </div>
-        </main>
+            ) : (
+              <div className="mx-auto max-w-6xl space-y-8 px-4 py-8 sm:px-6 lg:px-8 animate-slide-in">
+                <HeroCard
+                  status={isLoading ? "running" : "done"}
+                  title={canonicalQuestion}
+                  summary={isLoading ? "Agents are currently running analysis..." : "Research complete."}
+                  metrics={metrics}
+                />
+
+                {isLoading && !report && charts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 space-y-6">
+                    <div className="relative h-20 w-20">
+                      <div className="absolute inset-0 rounded-full border-4 border-[#E5E7EB]" />
+                      <div className="absolute inset-0 rounded-full border-4 border-brand-accent border-t-transparent animate-spin" />
+                    </div>
+                    <div className="text-xl font-medium text-brand-ink animate-pulse">Running Research Pipeline...</div>
+                    <p className="text-sm text-brand-muted max-w-xs text-center">{lastMessage ?? "Extracting findings and comparing outcomes"}</p>
+                  </div>
+                ) : (
+                  <>
+                    {report && <KeyTakeaways markdown={report} />}
+
+                    <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
+                      <div className="space-y-8">
+                        <ChartsGrid charts={charts} />
+                        {report && <ReportSection markdown={report} />}
+                      </div>
+                      <ResearchSidebar sources={sources} />
+                    </section>
+                  </>
+                )}
+              </div>
+            )}
+          </main>
+        </div>
       </div>
     </div>
   )

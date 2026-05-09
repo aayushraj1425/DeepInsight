@@ -17,27 +17,27 @@ export function ResearchSources({ sources }: ResearchSourcesProps) {
   const [isOpen, setIsOpen] = useState(true)
 
   return (
-    <section className="rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+    <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)]">
       <button
         type="button"
         onClick={() => setIsOpen((value) => !value)}
         className="flex w-full items-center justify-between gap-3 text-left"
         aria-expanded={isOpen}
       >
-        <span className="flex items-center gap-2 text-sm font-semibold text-gray-100">
-          <FileText size={16} className="text-cyan-300" />
+        <span className="flex items-center gap-2 text-sm font-semibold text-brand-ink">
+          <FileText size={16} className="text-brand-accent" />
           Sources
         </span>
-        <span className="flex items-center gap-2 text-xs text-gray-500">
+        <span className="flex items-center gap-2 text-xs text-brand-muted">
           {sources.length}
-          <ChevronDown size={15} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+          <ChevronDown size={15} className={`transition-transform text-brand-muted ${isOpen ? "rotate-180" : ""}`} />
         </span>
       </button>
 
       {isOpen && (
         <div className="mt-4 space-y-2">
           {sources.length === 0 ? (
-            <div className="rounded-md border border-gray-800 bg-gray-950/50 px-3 py-4 text-sm text-gray-500">
+            <div className="rounded-lg border border-[#E5E7EB] bg-brand-surface px-3 py-4 text-sm text-brand-muted">
               No sources fetched yet.
             </div>
           ) : (
@@ -47,14 +47,14 @@ export function ResearchSources({ sources }: ResearchSourcesProps) {
                 href={source.url}
                 target="_blank"
                 rel="noreferrer"
-                className="block rounded-md border border-gray-800 bg-gray-950/50 p-3 transition-colors hover:border-cyan-500/40 hover:bg-cyan-500/5"
+                className="block rounded-lg border border-[#E5E7EB] bg-brand-surface p-3 transition-all hover:border-brand-accent/40 hover:bg-brand-highlight/40 hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="line-clamp-2 text-sm font-medium leading-5 text-gray-100">
+                    <div className="line-clamp-2 text-sm font-medium leading-5 text-brand-ink">
                       {source.title}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-500">
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-brand-muted">
                       <span>{source.provider}</span>
                       {source.year && <span>{source.year}</span>}
                       {typeof source.citationCount === "number" && (
@@ -62,7 +62,7 @@ export function ResearchSources({ sources }: ResearchSourcesProps) {
                       )}
                     </div>
                   </div>
-                  <ExternalLink size={14} className="mt-0.5 shrink-0 text-gray-500" />
+                  <ExternalLink size={14} className="mt-0.5 shrink-0 text-brand-accent" />
                 </div>
               </a>
             ))
