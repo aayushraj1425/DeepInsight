@@ -2,7 +2,7 @@ import asyncio
 import httpx
 
 _BASE = "https://api.semanticscholar.org/graph/v1"
-_FIELDS = "title,abstract,year,authors,citationCount,paperId,tldr,venue,publicationTypes"
+_FIELDS = "title,abstract,year,authors,citationCount,paperId,tldr,venue,publicationTypes,openAccessPdf,externalIds"
 _HEADERS = {"User-Agent": "DeepQuery research demo"}
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
 
@@ -55,14 +55,16 @@ async def search_papers(query: str, limit: int = 6) -> list[dict]:
         tldr_text = (p.get("tldr") or {}).get("text") or ""
 
         filtered.append({
-            "paper_id":       p.get("paperId", ""),
-            "title":          p.get("title", ""),
-            "abstract":       abstract,
-            "tldr":           tldr_text,
-            "year":           p.get("year"),
-            "citation_count": p.get("citationCount", 0),
-            "venue":          p.get("venue") or "",
-            "pub_types":      pub_types,
+            "paper_id":        p.get("paperId", ""),
+            "title":           p.get("title", ""),
+            "abstract":        abstract,
+            "tldr":            tldr_text,
+            "year":            p.get("year"),
+            "citation_count":  p.get("citationCount", 0),
+            "venue":           p.get("venue") or "",
+            "pub_types":       pub_types,
+            "openAccessPdf":   p.get("openAccessPdf"),
+            "externalIds":     p.get("externalIds"),
         })
 
     # Sort: peer-reviewed first, then by citation count

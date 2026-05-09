@@ -6,6 +6,7 @@ from agents.state import AgentState
 from events import AgentEvent
 from runtime import emit
 from llm import client
+from tools.paper_fetcher import fetch_full_text
 
 _NUMBER_RE = re.compile(r"\d")
 
@@ -27,7 +28,7 @@ class PaperFindings(BaseModel):
 
 
 def _build_source_text(paper: dict) -> str:
-    """Layer 1: combine abstract + tldr into one source block."""
+    """Layer 1: combine abstract + tldr into one source block (used as fallback)."""
     parts = []
     if paper.get("abstract"):
         parts.append(paper["abstract"])
@@ -63,8 +64,15 @@ def _validate_findings(findings: list[Finding], source_text: str) -> list[Findin
 
 
 async def _extract_one(paper: dict) -> list[dict]:
-    # Layer 1: build source text and skip if too thin
-    source_text = _build_source_text(paper)
+    # Fetch the best available text: full paper body > abstract+tldr
+    source_text = await fetch_full_text(paper)
+
+    # Also keep abstract+tldr for the substring validator (full text contains them)
+    abstract_text = _build_source_text(paper)
+
+    # Use whichever is longer as the validation haystack
+    validator_text = source_text if len(source_text) >= len(abstract_text) else abstract_text
+
     if len(source_text) < 200:
         return []
 
@@ -75,17 +83,18 @@ async def _extract_one(paper: dict) -> list[dict]:
                 {
                     "role": "system",
                     "content": (
-                        "You extract numeric findings from a research paper.\n\n"
-                        "RULES — absolute, no exceptions:\n"
-                        "1. Only extract a finding if a SPECIFIC NUMBER is explicitly stated in the source text.\n"
-                        "2. The `source_quote` field MUST be an EXACT verbatim sentence from the source text. "
-                        "Do not paraphrase, summarise, or invent.\n"
-                        "3. If the text has no specific numeric findings, return an empty list. "
-                        "Returning nothing is correct and expected.\n"
-                        "4. Never produce a finding whose number does not appear in the source text.\n"
-                        "5. If the text says 'significant effect' or 'improved outcomes' without a "
-                        "specific number, do NOT invent one — skip it.\n"
-                        "6. Do not convert qualitative words ('majority', 'most', 'significant') into percentages."
+                        "You are a parser, not a researcher. The paper text below already contains the numbers.\n\n"
+                        "Your ONLY job is to locate numeric findings that are explicitly written in the text "
+                        "and copy them out exactly as structured data.\n\n"
+                        "ABSOLUTE RULES:\n"
+                        "1. Every number in a finding MUST appear verbatim in the source text — do not estimate, "
+                        "round, or infer.\n"
+                        "2. `source_quote` MUST be a word-for-word copy of the sentence containing the number. "
+                        "Do not paraphrase or shorten.\n"
+                        "3. If the text contains no explicit numeric results, return an empty list. "
+                        "An empty list is the correct answer when there are no numbers.\n"
+                        "4. Qualitative words ('majority', 'significant', 'improved') are NOT numbers — skip them.\n"
+                        "5. Do not invent, estimate, or extrapolate any value."
                     ),
                 },
                 {
@@ -93,15 +102,16 @@ async def _extract_one(paper: dict) -> list[dict]:
                     "content": (
                         f"Title: {paper['title']}\n"
                         f"Year: {paper.get('year')}\n\n"
-                        f"Source text:\n\"\"\"\n{source_text}\n\"\"\""
+                        f"Paper text:\n\"\"\"\n{source_text}\n\"\"\"\n\n"
+                        "Parse out every numeric finding. Copy each number-containing sentence verbatim into source_quote."
                     ),
                 },
             ],
             response_model=PaperFindings,
         )
 
-        # Layer 2: validate every finding against the source text
-        validated = _validate_findings(result.findings, source_text)
+        # Layer 2: validate every finding against the fetched text
+        validated = _validate_findings(result.findings, validator_text)
 
         rows = []
         for f in validated:
