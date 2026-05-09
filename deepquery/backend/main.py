@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from events import AgentEvent
 from runtime import create_session, get_queue, remove_session, emit
 from agents.graph import build_graph
+from agents.extractor import _extract_one, _validate_findings, _build_source_text
 from demo_cache import run_cached_demo
 from tools.document_parser import parse_pdf, parse_csv
 
@@ -46,6 +47,83 @@ class InvestigationRequest(BaseModel):
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
+
+
+class DebugRequest(BaseModel):
+    query: str
+
+
+@app.post("/api/debug/extraction")
+async def debug_extraction(req: DebugRequest):
+    """
+    Diagnostic endpoint: run search + extraction on a query and show exactly
+    what each layer accepts/rejects. Use this to diagnose bad queries.
+    """
+    from tools.papers import search_papers
+    from tools.web_search import web_search, enrich_web_results
+
+    papers = await search_papers(req.query, limit=6)
+    if not papers:
+        raw_web = web_search(req.query, max_results=4)
+        papers = await enrich_web_results(raw_web)
+
+    report = []
+    for p in papers:
+        source_text = _build_source_text(p)
+        entry = {
+            "title":           p.get("title"),
+            "year":            p.get("year"),
+            "venue":           p.get("venue"),
+            "pub_types":       p.get("pub_types") or p.get("source"),
+            "citations":       p.get("citation_count"),
+            "abstract_length": len(p.get("abstract") or ""),
+            "source_text_length": len(source_text),
+            "abstract_preview":   source_text[:300],
+            "skipped_thin":    len(source_text) < 200,
+        }
+        if len(source_text) >= 200:
+            from agents.extractor import Finding, PaperFindings
+            from llm import client
+            try:
+                result: PaperFindings = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": (
+                            "Extract numeric findings with exact source quotes. "
+                            "Only extract if a specific number is explicitly in the text."
+                        )},
+                        {"role": "user", "content": f"Title: {p['title']}\n\nText:\n\"\"\"\n{source_text}\n\"\"\""},
+                    ],
+                    response_model=PaperFindings,
+                )
+                raw = result.findings
+                validated = _validate_findings(raw, source_text)
+                entry["raw_findings_count"] = len(raw)
+                entry["validated_findings_count"] = len(validated)
+                entry["validated_findings"] = [f.model_dump() for f in validated]
+                entry["rejected_findings"] = [
+                    f.model_dump() for f in raw if f not in validated
+                ]
+            except Exception as exc:
+                entry["extraction_error"] = str(exc)
+        else:
+            entry["raw_findings_count"] = 0
+            entry["validated_findings_count"] = 0
+
+        report.append(entry)
+
+    return {
+        "query": req.query,
+        "papers_found": len(papers),
+        "papers": report,
+        "diagnosis": (
+            "All findings hallucinated — Layer 2 catching them"
+            if all(e.get("validated_findings_count", 0) == 0 and e.get("raw_findings_count", 0) > 0 for e in report if not e.get("skipped_thin"))
+            else "Abstracts have no numbers — need better paper sources or a different query"
+            if all(e.get("raw_findings_count", 0) == 0 for e in report)
+            else "Extraction working normally"
+        ),
+    }
 
 
 @app.post("/api/upload")
