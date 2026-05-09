@@ -1,0 +1,17 @@
+export type EventType =
+  | "node_start"
+  | "node_end"
+  | "tool_call"
+  | "tool_result"
+  | "critic_decision"
+  | "chart_ready"
+  | "report_ready"
+  | "error"
+  | "done"
+
+export interface AgentEvent {
+  type: EventType
+  agent: string
+  payload: Record<string, unknown>
+  timestamp: string
+}
