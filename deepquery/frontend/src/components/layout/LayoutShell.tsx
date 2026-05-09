@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Clock, ArrowRight } from "lucide-react"
 import type { ChartSpec, AgentEvent } from "../../types/events"
 import { ChartsGrid } from "./ChartsGrid"
@@ -65,11 +65,6 @@ export function LayoutShell() {
     { label: "Tools",    value: String(Array.isArray(analystEnd?.payload.tools_run) ? (analystEnd!.payload.tools_run as unknown[]).length : 0) },
     { label: "Charts",   value: String(charts.length) },
   ]
-
-  // Refresh history display when returning to input mode
-  useEffect(() => {
-    if (isInputMode) setHistory(loadHistory())
-  }, [isInputMode])
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -150,6 +145,7 @@ export function LayoutShell() {
   const handleHome = () => {
     esRef.current?.close()
     setIsLoading(false)
+    setHistory(loadHistory())
     setIsInputMode(true)
   }
 
@@ -210,7 +206,7 @@ export function LayoutShell() {
                       key={h.ts}
                       type="button"
                       onClick={() => handleAnalyze(h.query, [])}
-                      className="group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-all hover:bg-brand-highlight"
+                      className="group flex w-full items-center gap-2 rounded-lg border border-brand-accent/10 bg-white px-3 py-2.5 text-left text-sm transition-all hover:border-brand-accent/30 hover:bg-brand-highlight/80"
                     >
                       <ArrowRight
                         size={12}

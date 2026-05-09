@@ -25,7 +25,7 @@ export function Topbar({ onHome, onDownload, onShare, showActions }: TopbarProps
         {/* Logo — always clickable as Home */}
         <button
           onClick={onHome}
-          className="flex min-w-0 items-center gap-3 group"
+          className="group flex min-w-0 items-center gap-3 rounded-lg bg-brand-highlight/50 px-2 py-1 transition-colors hover:bg-brand-highlight"
           type="button"
           aria-label="Home"
         >
@@ -47,7 +47,7 @@ export function Topbar({ onHome, onDownload, onShare, showActions }: TopbarProps
           <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={onHome}
-              className="flex h-8 items-center gap-2 rounded-md bg-brand-highlight px-3 text-xs font-semibold text-brand-accent transition-all hover:bg-brand-accent hover:text-white border border-brand-accent/30 hover:border-brand-accent"
+              className="flex h-8 items-center gap-2 rounded-md border border-brand-accent/30 bg-brand-highlight px-3 text-xs font-semibold text-brand-accent transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white"
               title="New research"
               type="button"
             >
@@ -58,7 +58,7 @@ export function Topbar({ onHome, onDownload, onShare, showActions }: TopbarProps
             <button
               onClick={onDownload}
               disabled={!onDownload}
-              className="flex h-8 items-center gap-2 rounded-md bg-brand-highlight px-3 text-xs font-semibold text-brand-accent transition-all hover:bg-brand-accent hover:text-white border border-brand-accent/30 hover:border-brand-accent disabled:opacity-30 disabled:pointer-events-none"
+              className="flex h-8 items-center gap-2 rounded-md border border-brand-accent/30 bg-brand-highlight px-3 text-xs font-semibold text-brand-accent transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white disabled:pointer-events-none disabled:opacity-30"
               title="Download report as Markdown"
               type="button"
             >
@@ -68,7 +68,7 @@ export function Topbar({ onHome, onDownload, onShare, showActions }: TopbarProps
 
             <button
               onClick={handleShare}
-              className="flex h-8 items-center gap-2 rounded-md bg-brand-accent px-3 text-xs font-semibold text-white shadow-[0_2px_8px_rgba(226,90,61,0.3)] transition-all hover:opacity-90 hover:shadow-[0_4px_14px_rgba(226,90,61,0.4)]"
+              className="flex h-8 items-center gap-2 rounded-md bg-brand-accent px-3 text-xs font-semibold text-white shadow-[0_2px_8px_rgba(15,118,110,0.30)] transition-all hover:bg-teal-800 hover:shadow-[0_4px_14px_rgba(15,118,110,0.42)]"
               title="Copy query to clipboard"
               type="button"
             >

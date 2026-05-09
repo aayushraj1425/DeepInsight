@@ -21,7 +21,7 @@ export function ResearchSources({ sources }: ResearchSourcesProps) {
       <button
         type="button"
         onClick={() => setIsOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 text-left"
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-brand-accent/15 bg-brand-highlight/45 px-2 py-1.5 text-left transition-colors hover:border-brand-accent/30 hover:bg-brand-highlight"
         aria-expanded={isOpen}
       >
         <span className="flex items-center gap-2 text-sm font-semibold text-brand-ink">

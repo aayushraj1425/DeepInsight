@@ -10,8 +10,8 @@ export default {
           surface: '#F5F5F5',
           ink: '#1A1A1A',
           muted: '#666666',
-          accent: '#E25A3D',
-          highlight: '#FFEDD5',
+          accent: '#0F766E',
+          highlight: '#CCFBF1',
         },
       },
       fontFamily: {

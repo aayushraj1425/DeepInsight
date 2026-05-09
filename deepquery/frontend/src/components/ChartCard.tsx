@@ -11,6 +11,28 @@ interface Props {
   className?: string
 }
 
+type ChartValue = string | number
+
+interface ChartTrace {
+  type?: string
+  x?: ChartValue[]
+  y?: ChartValue[]
+  marker?: {
+    color?: string | string[]
+  }
+}
+
+interface BarDatum {
+  x: string
+  y: number
+  color: string
+}
+
+interface PointDatum {
+  x: number
+  y: number
+}
+
 export function ChartCard({ chart, className }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -18,12 +40,15 @@ export function ChartCard({ chart, className }: Props) {
     if (!containerRef.current || !chart.figure?.data || chart.figure.data.length === 0) return
 
     const container = containerRef.current
-    const dataObj = chart.figure.data[0] as any
+    const dataObj = chart.figure.data[0] as ChartTrace
+    if (!Array.isArray(dataObj.x) || !Array.isArray(dataObj.y)) return
+
     const type = dataObj.type
 
     const margin = { top: 20, right: 30, bottom: 40, left: 40 }
     const width = container.clientWidth - margin.left - margin.right
     const height = container.clientHeight - margin.top - margin.bottom
+    if (width <= 0 || height <= 0) return
 
     d3.select(container).selectAll("*").remove()
 
@@ -42,16 +67,21 @@ export function ChartCard({ chart, className }: Props) {
       .attr("transform", `translate(${margin.left},${margin.top})`)
 
     if (type === "bar") {
-      const data = dataObj.x.map((xVal: string, i: number) => ({
-        x: xVal,
-        y: dataObj.y[i],
+      const data: BarDatum[] = dataObj.x.map((xVal, i) => ({
+        x: String(xVal),
+        y: Number(dataObj.y?.[i] ?? 0),
         color: Array.isArray(dataObj.marker?.color)
           ? dataObj.marker.color[i]
-          : dataObj.marker?.color || "#E25A3D",
-      }))
+          : dataObj.marker?.color || "#0F766E",
+      })).filter((d) => Number.isFinite(d.y))
 
-      const x = d3.scaleBand().domain(data.map((d: any) => d.x)).range([0, width]).padding(0.3)
-      const y = d3.scaleLinear().domain([Math.min(0, d3.min(data, (d: any) => Number(d.y)) ?? 0), d3.max(data, (d: any) => Number(d.y)) ?? 0]).nice().range([height, 0])
+      if (data.length === 0) return
+
+      const minY = d3.min(data, (d) => d.y) ?? 0
+      const maxY = d3.max(data, (d) => d.y) ?? 0
+
+      const x = d3.scaleBand<string>().domain(data.map((d) => d.x)).range([0, width]).padding(0.3)
+      const y = d3.scaleLinear().domain([Math.min(0, minY), maxY]).nice().range([height, 0])
 
       svg.append("g")
         .attr("class", "grid")
@@ -80,22 +110,22 @@ export function ChartCard({ chart, className }: Props) {
         .attr("font-family", "Inter, sans-serif")
 
       const defs = svg.append("defs")
-      data.forEach((d: any, i: number) => {
+      data.forEach((_row, i) => {
         const gradient = defs.append("linearGradient")
           .attr("id", `gradient-bar-${i}`)
           .attr("x1", "0%").attr("x2", "0%")
           .attr("y1", "100%").attr("y2", "0%")
-        gradient.append("stop").attr("offset", "0%").attr("stop-color", "#FFEDD5").attr("stop-opacity", 1)
-        gradient.append("stop").attr("offset", "100%").attr("stop-color", "#E25A3D").attr("stop-opacity", 1)
+        gradient.append("stop").attr("offset", "0%").attr("stop-color", "#CCFBF1").attr("stop-opacity", 1)
+        gradient.append("stop").attr("offset", "100%").attr("stop-color", "#0F766E").attr("stop-opacity", 1)
       })
 
-      svg.selectAll(".bar")
+      svg.selectAll<SVGPathElement, BarDatum>(".bar")
         .data(data)
         .enter()
         .append("path")
         .attr("class", "bar")
-        .attr("fill", (_d: any, i: number) => `url(#gradient-bar-${i})`)
-        .attr("d", (d: any) => {
+        .attr("fill", (_d, i) => `url(#gradient-bar-${i})`)
+        .attr("d", (d) => {
           const zero = y(0)
           const barY = Math.min(y(d.y), zero)
           const barHeight = Math.abs(y(d.y) - zero)
@@ -109,12 +139,12 @@ export function ChartCard({ chart, className }: Props) {
           }
         })
         .style("opacity", 0)
-        .on("mouseover", function (event, d: any) {
+        .on("mouseover", function (event, d) {
           tooltip.html(`<b>${d.x}</b><br/>Value: ${d.y}`)
                  .style("left", `${event.pageX + 10}px`)
                  .style("top", `${event.pageY - 28}px`)
                  .classed("hidden", false)
-          d3.select(this).style("filter", "drop-shadow(0 4px 12px rgba(226,90,61,0.3))")
+          d3.select(this).style("filter", "drop-shadow(0 4px 12px rgba(15,118,110,0.3))")
         })
         .on("mouseout", function () {
           tooltip.classed("hidden", true)
@@ -126,16 +156,24 @@ export function ChartCard({ chart, className }: Props) {
         .style("opacity", 1)
 
     } else if (type === "scatter") {
-      const data = dataObj.x.map((xVal: number, i: number) => ({
-        x: xVal,
-        y: dataObj.y[i]
-      }))
-      const color = "#E25A3D"
+      const data: PointDatum[] = dataObj.x.map((xVal, i) => ({
+        x: Number(xVal),
+        y: Number(dataObj.y?.[i] ?? 0)
+      })).filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y))
 
-      const x = d3.scaleLinear().domain((d3.extent(data, (d: any) => d.x) as unknown) as [number, number]).range([0, width])
-      x.domain([x.domain()[0], x.domain()[1] + 1])
+      if (data.length === 0) return
 
-      const y = d3.scaleLinear().domain([Math.min(0, d3.min(data, (d: any) => Number(d.y)) ?? 0), d3.max(data, (d: any) => Number(d.y)) ?? 0]).nice().range([height, 0])
+      const color = "#0F766E"
+      const xExtent = d3.extent(data, (d) => d.x)
+      const minX = xExtent[0] ?? 0
+      const maxX = xExtent[1] ?? minX + 1
+      const minY = d3.min(data, (d) => d.y) ?? 0
+      const maxY = d3.max(data, (d) => d.y) ?? 0
+      const baseline = Math.min(0, minY)
+
+      const x = d3.scaleLinear().domain([minX, maxX === minX ? minX + 1 : maxX + 1]).range([0, width])
+
+      const y = d3.scaleLinear().domain([baseline, maxY]).nice().range([height, 0])
 
       svg.append("g")
         .attr("class", "grid")
@@ -163,14 +201,14 @@ export function ChartCard({ chart, className }: Props) {
         .attr("font-size", "11px")
         .attr("font-family", "Inter, sans-serif")
 
-      const line = d3.line<any>()
+      const line = d3.line<PointDatum>()
         .x(d => x(d.x))
         .y(d => y(d.y))
         .curve(d3.curveMonotoneX)
 
-      const area = d3.area<any>()
+      const area = d3.area<PointDatum>()
         .x(d => x(d.x))
-        .y0(y(Math.min(0, d3.min(data, (d: any) => Number(d.y)) ?? 0)))
+        .y0(y(baseline))
         .y1(d => y(d.y))
         .curve(d3.curveMonotoneX)
 
@@ -196,23 +234,26 @@ export function ChartCard({ chart, className }: Props) {
         .attr("stroke-width", 2.5)
         .attr("d", line)
 
-      const totalLength = (path.node() as SVGPathElement).getTotalLength()
-      path
-        .attr("stroke-dasharray", totalLength + " " + totalLength)
-        .attr("stroke-dashoffset", totalLength)
-        .transition().duration(1500).ease(d3.easeLinear).attr("stroke-dashoffset", 0)
+      const pathNode = path.node()
+      if (pathNode) {
+        const totalLength = pathNode.getTotalLength()
+        path
+          .attr("stroke-dasharray", totalLength + " " + totalLength)
+          .attr("stroke-dashoffset", totalLength)
+          .transition().duration(1500).ease(d3.easeLinear).attr("stroke-dashoffset", 0)
+      }
 
-      svg.selectAll(".dot")
+      svg.selectAll<SVGCircleElement, PointDatum>(".dot")
         .data(data)
         .enter()
         .append("circle")
-        .attr("cx", (d: any) => x(d.x))
-        .attr("cy", (d: any) => y(d.y))
+        .attr("cx", (d) => x(d.x))
+        .attr("cy", (d) => y(d.y))
         .attr("r", 5)
         .attr("fill", "#FFFFFF")
         .attr("stroke", color)
         .attr("stroke-width", 2)
-        .on("mouseover", function (event, d: any) {
+        .on("mouseover", function (event, d) {
           tooltip.html(`<b>${d.x}</b><br/>Value: ${d.y}`)
                  .style("left", `${event.pageX + 10}px`)
                  .style("top", `${event.pageY - 28}px`)

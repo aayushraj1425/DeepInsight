@@ -2,7 +2,7 @@ import { useState, useRef } from "react"
 import { ArrowRight, Paperclip, X, FileText, FileSpreadsheet } from "lucide-react"
 import logo from "../../assets/logo.png"
 
-export const EXAMPLE_QUERIES = [
+const EXAMPLE_QUERIES = [
   "GLP-1 effects on cognition",
   "Microplastics and gut microbiome",
   "Vitamin D and depression",
@@ -58,7 +58,7 @@ export function InputView({ onAnalyze }: InputViewProps) {
         className="mt-12 w-full max-w-2xl animate-slide-in"
         style={{ animationDelay: "180ms" }}
       >
-        <div className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-5 py-3.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] transition-all focus-within:border-brand-accent/50 focus-within:shadow-[0_10px_40px_-10px_rgba(226,90,61,0.18)]">
+        <div className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-5 py-3.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] transition-all focus-within:border-brand-accent/50 focus-within:shadow-[0_10px_40px_-10px_rgba(15,118,110,0.20)]">
           <input
             type="text"
             value={query}
@@ -73,7 +73,7 @@ export function InputView({ onAnalyze }: InputViewProps) {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 text-brand-muted transition-colors hover:text-brand-accent"
+            className="shrink-0 rounded-lg border border-brand-accent/25 bg-brand-highlight p-1 text-brand-accent shadow-sm transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white"
             title="Attach PDF or CSV"
           >
             <Paperclip size={18} />
@@ -91,7 +91,7 @@ export function InputView({ onAnalyze }: InputViewProps) {
           <button
             onClick={() => handleSubmit()}
             disabled={!query.trim() && files.length === 0}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-accent text-white shadow-[0_4px_14px_rgba(226,90,61,0.35)] transition-all hover:opacity-90 hover:shadow-[0_4px_20px_rgba(226,90,61,0.5)] disabled:opacity-30 disabled:shadow-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-accent text-white shadow-[0_4px_14px_rgba(15,118,110,0.32)] transition-all hover:bg-teal-800 hover:shadow-[0_4px_20px_rgba(15,118,110,0.44)] disabled:bg-brand-highlight disabled:text-brand-accent/45 disabled:shadow-none"
           >
             <ArrowRight size={18} />
           </button>
@@ -111,7 +111,7 @@ export function InputView({ onAnalyze }: InputViewProps) {
                 {file.name}
                 <button
                   onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
-                  className="ml-1 text-brand-muted hover:text-red-500 transition-colors"
+                  className="ml-1 rounded-full bg-rose-50 p-0.5 text-rose-600 transition-colors hover:bg-rose-600 hover:text-white"
                 >
                   <X size={11} />
                 </button>
@@ -134,10 +134,10 @@ export function InputView({ onAnalyze }: InputViewProps) {
             <button
               key={eq}
               onClick={() => handleSubmit(eq)}
-              className="group flex items-center gap-2 text-sm text-brand-muted transition-all hover:text-brand-accent"
+              className="group flex items-center gap-2 rounded-lg border border-brand-accent/20 bg-brand-highlight/60 px-3 py-1.5 text-sm font-medium text-brand-accent transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white"
             >
-              <span className="h-px w-4 rounded bg-brand-muted/30 transition-all group-hover:w-5 group-hover:bg-brand-accent" />
-              <span className="underline underline-offset-4 decoration-transparent group-hover:decoration-brand-accent/50 transition-all">
+              <span className="h-px w-4 rounded bg-brand-accent/50 transition-all group-hover:w-5 group-hover:bg-white/75" />
+              <span className="underline underline-offset-4 decoration-transparent transition-all group-hover:decoration-white/60">
                 "{eq}"
               </span>
             </button>

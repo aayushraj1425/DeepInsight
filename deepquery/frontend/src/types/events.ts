@@ -4,6 +4,7 @@ export type EventType =
   | "tool_call"
   | "tool_result"
   | "critic_decision"
+  | "sources_ready"
   | "chart_ready"
   | "report_ready"
   | "error"
