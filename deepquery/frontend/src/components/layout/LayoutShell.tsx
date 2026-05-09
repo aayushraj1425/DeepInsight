@@ -42,7 +42,7 @@ export function LayoutShell() {
   const [charts, setCharts] = useState<ChartSpec[]>([])
   const [report, setReport] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
-  const [sources] = useState<ResearchSource[]>([])
+  const [sources, setSources] = useState<ResearchSource[]>([])
   const [events, setEvents] = useState<AgentEvent[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory)
   const esRef = useRef<EventSource | null>(null)
@@ -84,6 +84,7 @@ export function LayoutShell() {
     setCharts([])
     setReport("")
     setEvents([])
+    setSources([])
 
     esRef.current?.close()
 
@@ -115,7 +116,9 @@ export function LayoutShell() {
         const event = JSON.parse(e.data) as AgentEvent
         setEvents((prev) => [...prev, event])
 
-        if (event.type === "chart_ready") {
+        if (event.type === "sources_ready") {
+          setSources((event.payload.sources as ResearchSource[]) || [])
+        } else if (event.type === "chart_ready") {
           setCharts((event.payload.chart_specs as ChartSpec[]) || [])
         } else if (event.type === "report_ready") {
           setReport((event.payload.report as string) || "")

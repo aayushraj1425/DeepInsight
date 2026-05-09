@@ -65,6 +65,28 @@ async def discovery_node(state: AgentState) -> dict:
 
         await asyncio.sleep(2.0)
 
+    # Build source list for the frontend Sources panel
+    source_list = []
+    for p in all_papers:
+        paper_id = p.get("paper_id", "")
+        url = (
+            p.get("url")                                          # web result
+            or (f"https://www.semanticscholar.org/paper/{paper_id}" if paper_id and not paper_id.startswith("file:") else "")
+        )
+        if not url:
+            continue
+        source_list.append({
+            "title":         p.get("title", "Untitled"),
+            "provider":      "Web" if p.get("source") == "web" else "Semantic Scholar",
+            "url":           url,
+            "year":          p.get("year"),
+            "citationCount": p.get("citation_count"),
+        })
+
+    await emit(sid, AgentEvent(
+        type="sources_ready", agent="discovery",
+        payload={"sources": source_list}
+    ))
     await emit(sid, AgentEvent(
         type="node_end", agent="discovery",
         payload={"total_papers": len(all_papers)}
