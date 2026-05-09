@@ -78,7 +78,7 @@ async def _extract_one(paper: dict) -> list[dict]:
 
     try:
         result: PaperFindings = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=[
                 {
                     "role": "system",

@@ -86,7 +86,7 @@ async def debug_extraction(req: DebugRequest):
             from llm import client
             try:
                 result: PaperFindings = await client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-4o",
                     messages=[
                         {"role": "system", "content": (
                             "Extract numeric findings with exact source quotes. "

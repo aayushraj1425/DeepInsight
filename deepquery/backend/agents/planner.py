@@ -25,7 +25,7 @@ async def planner_node(state: AgentState) -> dict:
     ))
 
     plan: ResearchPlan = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {
                 "role": "system",
