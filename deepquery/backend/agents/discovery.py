@@ -27,10 +27,12 @@ async def discovery_node(state: AgentState) -> dict:
         scholar_papers = []
         try:
             scholar_papers = await search_papers(sq, limit=6)
-        except Exception as exc:
+        except Exception:
+            # Rate-limited or network error — fall through to web search silently
             await emit(sid, AgentEvent(
-                type="error", agent="discovery",
-                payload={"message": f"Semantic Scholar failed for '{sq}': {exc}"}
+                type="tool_call", agent="discovery",
+                payload={"tool": "web_search_fallback", "query": sq,
+                         "reason": "Semantic Scholar rate limited — switching to web search"}
             ))
 
         if scholar_papers:
@@ -66,7 +68,7 @@ async def discovery_node(state: AgentState) -> dict:
                 payload={"source": "web_search", "query": sq, "found": len(web_papers), "new": new}
             ))
 
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(2.0)
 
     await emit(sid, AgentEvent(
         type="node_end", agent="discovery",

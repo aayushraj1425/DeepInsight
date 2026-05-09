@@ -28,9 +28,9 @@ async def search_papers(query: str, limit: int = 6) -> list[dict]:
                 resp.raise_for_status()
             retry_after = resp.headers.get("retry-after")
             try:
-                delay = float(retry_after) if retry_after else 1.5 * (attempt + 1)
+                delay = float(retry_after) if retry_after else 3.0 * (attempt + 1)
             except ValueError:
-                delay = 1.5 * (attempt + 1)
+                delay = 3.0 * (attempt + 1)
             await asyncio.sleep(delay)
 
     raw = resp.json().get("data", [])
