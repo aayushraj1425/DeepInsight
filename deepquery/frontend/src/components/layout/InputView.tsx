@@ -1,5 +1,6 @@
 import { useState, useRef } from "react"
 import { ArrowRight, Paperclip, X, FileText, FileSpreadsheet } from "lucide-react"
+import logo from "../../assets/logo.png"
 
 export const EXAMPLE_QUERIES = [
   "GLP-1 effects on cognition",
@@ -32,9 +33,7 @@ export function InputView({ onAnalyze }: InputViewProps) {
     <div className="flex h-full w-full flex-col items-center justify-center px-6 py-20 bg-brand-background">
       {/* Logo */}
       <div className="mb-14 flex items-center gap-3 animate-slide-in">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-accent text-white text-sm font-extrabold tracking-tight shadow-[0_4px_14px_rgba(226,90,61,0.4)]">
-          DQ
-        </div>
+        <img src={logo} alt="DeepQuery" className="h-14 w-14 rounded-xl object-contain" />
         <span className="font-serif text-2xl font-bold text-brand-ink">DeepQuery</span>
       </div>
 

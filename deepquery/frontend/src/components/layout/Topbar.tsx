@@ -1,5 +1,6 @@
 import { Home, Download, Share2, Check } from "lucide-react"
 import { useState } from "react"
+import logo from "../../assets/logo.png"
 
 interface TopbarProps {
   onHome: () => void
@@ -28,9 +29,11 @@ export function Topbar({ onHome, onDownload, onShare, showActions }: TopbarProps
           type="button"
           aria-label="Home"
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-accent text-[11px] font-extrabold text-white shadow-[0_2px_8px_rgba(226,90,61,0.35)] transition-all group-hover:shadow-[0_4px_14px_rgba(226,90,61,0.5)] group-hover:scale-105">
-            DQ
-          </div>
+          <img
+            src={logo}
+            alt="DeepQuery"
+            className="h-9 w-9 shrink-0 rounded-lg object-contain transition-transform group-hover:scale-105"
+          />
           <div className="min-w-0 text-left">
             <div className="truncate text-sm font-semibold leading-4 tracking-tight text-brand-ink group-hover:text-brand-accent transition-colors">
               DeepQuery
