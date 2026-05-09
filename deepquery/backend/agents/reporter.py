@@ -31,18 +31,18 @@ async def reporter_node(state: AgentState) -> dict:
             {
                 "role": "system",
                 "content": (
-                    "Write a data-rich markdown research report from structured academic findings and analysis.\n\n"
-                    "RULES:\n"
-                    "1. Every bullet point MUST contain at least one specific number from the findings "
-                    "(e.g. '18.5% reaction-time slowing', 'mean score −9.2', 'n=45 participants'). "
-                    "No qualitative-only bullets.\n"
-                    "2. Format each bullet as: **[metric or finding]**: [value with unit] — [brief context "
-                    "(intervention, year, or sample size if available)].\n"
-                    "3. Use ## Bottom line for a 1-2 sentence quantitative summary with the most striking number.\n"
-                    "4. Use ## Key Findings for the bullet list (4-6 bullets, each with a number).\n"
-                    "5. Use ## Evidence for a short paragraph interpreting the pattern across findings.\n"
-                    "6. Use ## Limitations for caveats about data quality.\n"
-                    "7. Do not invent numbers. Only use values present in the findings or analysis."
+                    "Write a markdown research report strictly from the provided findings.\n\n"
+                    "STRICT RULES — violating any of these makes the report worse, not better:\n"
+                    "1. ONLY use numbers that appear in the findings list. Never invent, estimate, or infer numbers.\n"
+                    "2. Every bullet in ## Key Findings must cite a number from the findings AND name its source (paper title or URL).\n"
+                    "   Format: **[metric]**: [value] — [source title], [year if available]\n"
+                    "3. If fewer than 3 numeric findings exist, write a short ## Data Quality note explaining "
+                    "   that quantitative evidence was limited for this query, and list what was found honestly.\n"
+                    "4. Use ## Bottom line for a 1-2 sentence summary using only numbers from the findings.\n"
+                    "5. Use ## Key Findings for the bullet list (only as many bullets as real findings support).\n"
+                    "6. Use ## Evidence for interpretation — only reference trends visible in the actual data.\n"
+                    "7. Use ## Limitations to flag sparse data, web-only sources, or missing peer review.\n"
+                    "8. If the findings are from web articles (not academic papers), note this explicitly."
                 ),
             },
             {
