@@ -1,4 +1,5 @@
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { Clock, ArrowRight } from "lucide-react"
 import type { ChartSpec, AgentEvent } from "../../types/events"
 import { ChartsGrid } from "./ChartsGrid"
 import { HeroCard } from "./HeroCard"
@@ -9,11 +10,30 @@ import { ReportSection } from "./ReportSection"
 import { Topbar } from "./Topbar"
 import { InputView } from "./InputView"
 
-const NAV_ITEMS = ["Dashboard", "Runs", "Agents", "Reports", "Settings"]
+// ── History ──────────────────────────────────────────────────────────────────
+
+interface HistoryEntry {
+  query: string
+  canonical: string
+  ts: number
+}
+
+function loadHistory(): HistoryEntry[] {
+  try { return JSON.parse(localStorage.getItem("dq_history") || "[]") } catch { return [] }
+}
+
+function saveToHistory(entry: HistoryEntry) {
+  const prev = loadHistory().filter((h) => h.query !== entry.query)
+  localStorage.setItem("dq_history", JSON.stringify([entry, ...prev].slice(0, 8)))
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function latestAgentEvent(events: AgentEvent[], agent: string, type: string) {
   return [...events].reverse().find((e) => e.agent === agent && e.type === type) ?? null
 }
+
+// ── Shell ─────────────────────────────────────────────────────────────────────
 
 export function LayoutShell() {
   const [isInputMode, setIsInputMode] = useState(true)
@@ -24,25 +44,34 @@ export function LayoutShell() {
   const [isLoading, setIsLoading] = useState(false)
   const [sources] = useState<ResearchSource[]>([])
   const [events, setEvents] = useState<AgentEvent[]>([])
+  const [history, setHistory] = useState<HistoryEntry[]>(loadHistory)
   const esRef = useRef<EventSource | null>(null)
 
-  const plannerEnd = latestAgentEvent(events, "planner", "node_end")
+  const plannerEnd   = latestAgentEvent(events, "planner",   "node_end")
   const discoveryEnd = latestAgentEvent(events, "discovery", "node_end")
   const extractorEnd = latestAgentEvent(events, "extractor", "node_end")
-  const analystEnd = latestAgentEvent(events, "analyst", "node_end")
+  const analystEnd   = latestAgentEvent(events, "analyst",   "node_end")
 
-  const canonicalQuestion = (plannerEnd?.payload.canonical_question as string | undefined) ?? query
+  const canonicalQuestion =
+    (plannerEnd?.payload.canonical_question as string | undefined) ?? query
 
   const lastMessage = [...events].reverse().find(
     (e) => typeof e.payload.message === "string"
   )?.payload.message as string | undefined
 
   const metrics = [
-    { label: "Papers", value: String((discoveryEnd?.payload.total_papers as number) ?? 0) },
+    { label: "Papers",   value: String((discoveryEnd?.payload.total_papers  as number) ?? 0) },
     { label: "Findings", value: String((extractorEnd?.payload.total_findings as number) ?? 0) },
-    { label: "Tools", value: String(Array.isArray(analystEnd?.payload.tools_run) ? (analystEnd!.payload.tools_run as unknown[]).length : 0) },
-    { label: "Charts", value: String(charts.length) },
+    { label: "Tools",    value: String(Array.isArray(analystEnd?.payload.tools_run) ? (analystEnd!.payload.tools_run as unknown[]).length : 0) },
+    { label: "Charts",   value: String(charts.length) },
   ]
+
+  // Refresh history display when returning to input mode
+  useEffect(() => {
+    if (isInputMode) setHistory(loadHistory())
+  }, [isInputMode])
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   const handleAnalyze = async (q: string, files: File[]) => {
     setIsExiting(true)
@@ -59,7 +88,6 @@ export function LayoutShell() {
     esRef.current?.close()
 
     try {
-      // Upload files first (if any), get back a pre-created session_id
       let uploadedSessionId: string | null = null
       if (files.length > 0) {
         const formData = new FormData()
@@ -94,6 +122,12 @@ export function LayoutShell() {
         } else if (event.type === "done") {
           setIsLoading(false)
           es.close()
+          // Save to history when research completes
+          const canonical =
+            (event.payload.canonical_question as string | undefined) ?? q
+          const entry = { query: q, canonical, ts: Date.now() }
+          saveToHistory(entry)
+          setHistory(loadHistory())
         } else if (event.type === "error" && event.agent === "system") {
           setIsLoading(false)
           es.close()
@@ -110,39 +144,89 @@ export function LayoutShell() {
     }
   }
 
-  const handleBack = () => {
+  const handleHome = () => {
     esRef.current?.close()
     setIsLoading(false)
     setIsInputMode(true)
   }
 
+  const handleDownload = () => {
+    if (!report) return
+    const filename = canonicalQuestion
+      .slice(0, 50)
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase()
+    const blob = new Blob(
+      [`# ${canonicalQuestion}\n\n${report}`],
+      { type: "text/markdown;charset=utf-8" }
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `deepquery-${filename}.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleShare = async () => {
+    const text = `DeepQuery: ${canonicalQuestion}`
+    await navigator.clipboard.writeText(text)
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-brand-background text-brand-ink relative font-sans">
       <div className="relative z-10">
-        <Topbar onBack={isInputMode ? undefined : handleBack} />
+        <Topbar
+          onHome={handleHome}
+          onDownload={report ? handleDownload : undefined}
+          onShare={handleShare}
+          showActions={!isInputMode}
+        />
 
         <div className={`grid h-[calc(100svh-3.5rem)] grid-cols-1 overflow-hidden ${!isInputMode ? "lg:grid-cols-[240px_minmax(0,1fr)]" : ""}`}>
-          <aside className={`border-r border-[#E5E7EB] bg-brand-surface ${isInputMode ? "hidden" : "hidden lg:block"}`}>
-            <div className="sticky top-14 flex h-[calc(100svh-3.5rem)] flex-col overflow-y-auto p-4">
-              <nav className="space-y-1" aria-label="Primary navigation">
-                {NAV_ITEMS.map((item, index) => (
-                  <a
-                    key={item}
-                    href="#"
-                    className={`block rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                      index === 0
-                        ? "bg-brand-highlight text-brand-accent"
-                        : "text-brand-muted hover:bg-brand-highlight/60 hover:text-brand-ink"
-                    }`}
-                  >
-                    {item}
-                  </a>
-                ))}
+
+          {/* Sidebar — history, only on results page */}
+          <aside className={`border-r border-[#E5E7EB] bg-brand-surface ${isInputMode ? "hidden" : "hidden lg:flex lg:flex-col"}`}>
+            <div className="flex h-[calc(100svh-3.5rem)] flex-col overflow-y-auto p-4">
+
+              <div className="mb-3 flex items-center gap-2">
+                <Clock size={13} className="text-brand-accent" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-brand-muted">
+                  Recent
+                </span>
+              </div>
+
+              <nav className="flex-1 space-y-1" aria-label="Research history">
+                {history.length === 0 ? (
+                  <p className="px-2 text-xs text-brand-muted/60 italic">No history yet.</p>
+                ) : (
+                  history.map((h) => (
+                    <button
+                      key={h.ts}
+                      type="button"
+                      onClick={() => handleAnalyze(h.query, [])}
+                      className="group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-all hover:bg-brand-highlight"
+                    >
+                      <ArrowRight
+                        size={12}
+                        className="shrink-0 text-brand-muted/40 transition-colors group-hover:text-brand-accent"
+                      />
+                      <span className="truncate text-brand-muted group-hover:text-brand-ink transition-colors leading-snug">
+                        {h.canonical || h.query}
+                      </span>
+                    </button>
+                  ))
+                )}
               </nav>
 
-              <div className="mt-auto rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)]">
+              {/* System status */}
+              <div className="mt-4 rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)]">
                 <div className="flex items-center justify-between mb-3">
-                  <div className="text-xs font-semibold text-brand-ink uppercase tracking-wider">System status</div>
+                  <div className="text-[11px] font-semibold text-brand-ink uppercase tracking-wider">
+                    System status
+                  </div>
                   <div className="h-2 w-2 rounded-full bg-brand-accent animate-pulse" />
                 </div>
                 <div className="h-1.5 rounded-full bg-[#E5E7EB] overflow-hidden">
@@ -152,11 +236,14 @@ export function LayoutShell() {
             </div>
           </aside>
 
+          {/* Main */}
           <main className="min-w-0 overflow-y-auto bg-brand-background" aria-label="Main content">
             {isInputMode ? (
               <div
                 className="h-full transition-all duration-300 ease-in"
-                style={isExiting ? { opacity: 0, transform: "translateY(-20px)" } : { opacity: 1, transform: "translateY(0)" }}
+                style={isExiting
+                  ? { opacity: 0, transform: "translateY(-20px)" }
+                  : { opacity: 1, transform: "translateY(0)" }}
               >
                 <InputView onAnalyze={handleAnalyze} />
               </div>
@@ -175,13 +262,16 @@ export function LayoutShell() {
                       <div className="absolute inset-0 rounded-full border-4 border-[#E5E7EB]" />
                       <div className="absolute inset-0 rounded-full border-4 border-brand-accent border-t-transparent animate-spin" />
                     </div>
-                    <div className="text-xl font-medium text-brand-ink animate-pulse">Running Research Pipeline...</div>
-                    <p className="text-sm text-brand-muted max-w-xs text-center">{lastMessage ?? "Extracting findings and comparing outcomes"}</p>
+                    <div className="text-xl font-medium text-brand-ink animate-pulse">
+                      Running Research Pipeline...
+                    </div>
+                    <p className="text-sm text-brand-muted max-w-xs text-center">
+                      {lastMessage ?? "Extracting findings and comparing outcomes"}
+                    </p>
                   </div>
                 ) : (
                   <>
                     {report && <KeyTakeaways markdown={report} />}
-
                     <section className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
                       <div className="space-y-8">
                         <ChartsGrid charts={charts} />
