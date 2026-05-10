@@ -119,7 +119,7 @@ def forest_plot(findings: list[dict]) -> tuple[dict, str]:
         "x": values,
         "y": labels,
         "mode": "markers",
-        "marker": {"size": 10, "color": "#E25A3D", "line": {"color": "#FFEDD5", "width": 1}},
+        "marker": {"size": 10, "color": "#0F766E", "line": {"color": "#CCFBF1", "width": 1}},
         "hovertemplate": hover,
         "orientation": "h",
     }
@@ -163,7 +163,7 @@ def bar_comparison(compare_result: dict) -> tuple[dict, str]:
         go.Bar(
             x=labels,
             y=values,
-            marker={"color": "#E25A3D", "line": {"color": "#FFEDD5", "width": 1}},
+            marker={"color": "#0F766E", "line": {"color": "#CCFBF1", "width": 1}},
             error_y={"type": "data", "array": errors, "visible": any(e > 0 for e in errors), "color": "#9CA3AF"},
             customdata=counts,
             hovertemplate="<b>%{x}</b><br>Average: %{y:.3f}<br>Studies: %{customdata}<extra></extra>",
@@ -206,7 +206,7 @@ def timeline(findings: list[dict]) -> tuple[dict, str]:
             marker={
                 "size": sizes,
                 "color": values,
-                "colorscale": [[0, "#FFEDD5"], [0.5, "#E25A3D"], [1, "#1A1A1A"]],
+                "colorscale": [[0, "#CCFBF1"], [0.5, "#0F766E"], [1, "#1A1A1A"]],
                 "line": {"color": "#666666", "width": 0.8},
                 "showscale": False,
             },
