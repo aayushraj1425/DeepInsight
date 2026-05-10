@@ -35,6 +35,10 @@ DeepQuery is a multi-agent research workspace that turns a research question int
 
 ## Architecture
 
+High-resolution architecture diagram: [docs/architecture-diagram.svg](docs/architecture-diagram.svg)
+
+![DeepQuery architecture diagram](docs/architecture-diagram.svg)
+
 ```mermaid
 flowchart LR
     User[User question] --> FE[React + Vite frontend]
@@ -117,6 +121,12 @@ If `5174` is occupied, Vite will fall back to the next available `517x` port.
 ## Reproduce The Demo
 
 For a fast, reliable hackathon demo, use the cached demo queries. These bypass live source search and OpenAI calls while still streaming the full agent workflow.
+
+Demo setup:
+
+- Cached demo mode works without an API key.
+- Live arbitrary research queries require `OPENAI_API_KEY` in `deepquery/backend/.env`.
+- Start from the sample file: [backend/.env.example](backend/.env.example).
 
 Recommended demo query:
 
