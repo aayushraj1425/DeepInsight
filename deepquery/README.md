@@ -195,3 +195,5 @@ Uploaded user files are parsed locally and stored in memory for the active sessi
 ## Submission Checklist
 
 See [SUBMISSION.md](SUBMISSION.md) for the hackathon submission copy, Loom script, team roster template, and 150-300 word write-up.
+##Screenshot: <img width="1469" height="789" alt="Screenshot 2026-05-10 at 10 49 44 AM" src="https://github.com/user-attachments/assets/1747ea50-1939-4eca-981b-39b915e73d87" />
+ <img width="1469" height="770" alt="Screenshot 2026-05-10 at 10 49 54 AM" src="https://github.com/user-attachments/assets/7868e064-47d3-41ea-b680-b066a4bc6f11" />
