@@ -15,9 +15,9 @@ Replace placeholders before submission.
 
 | Name | Role | Contact |
 | --- | --- | --- |
-| Alok Thakur | Full-stack / agents / product | TODO |
-| TODO | TODO | TODO |
-| TODO | TODO | TODO |
+| Alok Thakur | backend / agents / product | (https://www.linkedin.com/in/alokthakur012/) |
+| Aayush Raj Sah | frontend / UI/UX / product | https://www.linkedin.com/in/aayush-raj-sah-01b24b364/?skipRedirect=true |
+
 
 ## Short Write-Up
 
@@ -25,18 +25,7 @@ DeepQuery helps researchers, students, and analysts move from a broad research q
 
 The workspace is designed for decision support rather than passive data display. Results include significance highlighting, sample-size weighting, and a Source Peek panel that links chart points back to the extracted quote behind them. For hackathon reliability, DeepQuery includes cached demo runs that stream the full agent workflow in seconds while preserving the same UI and event flow as live research mode. The impact is a faster, more transparent path from question to evidence-backed insight, especially for users who need to understand both the answer and why they should trust it.
 
-## Loom Video Plan
 
-Target length: 2-5 minutes. Record with Loom only.
-
-1. **0:00-0:20** - Introduce DeepQuery and the problem: research answers are slow to verify and hard to trust.
-2. **0:20-0:45** - Show the homepage and enter the cached demo query: `GLP-1 effects on cognition`.
-3. **0:45-1:30** - Show the live agent pipeline streaming through planner, discovery, extractor, analyst, critic, visualizer, and reporter.
-4. **1:30-2:15** - Show the Executive Summary card and explain the decision-support layer.
-5. **2:15-3:00** - Show charts with significance/sample-size visual cues.
-6. **3:00-3:40** - Click a chart bar or point and show Source Peek with the exact evidence quote.
-7. **3:40-4:20** - Show the final markdown report and explain the critic/retry loop.
-8. **4:20-4:45** - Mention limitations and next steps: Fast Mode, exact PDF offsets, deployment, persistent history.
 
 ## Demo Commands
 
@@ -105,8 +94,6 @@ Do not commit a real API key. Use [backend/.env.example](backend/.env.example) a
 ## Data / Synthetic Data Provenance
 
 - Live mode uses public research APIs: Semantic Scholar, PubMed, arXiv, OpenAlex, and optional web search.
-- Cached hackathon demos are hand-authored synthetic examples in [backend/demo_cache.py](backend/demo_cache.py). They are included to make judging reproducible and should be described as synthetic demo data.
-- Uploaded PDFs/CSVs/text files are parsed locally and stored in memory only for the active session.
 
 ## Known Limitations
 
@@ -116,14 +103,4 @@ Do not commit a real API key. Use [backend/.env.example](backend/.env.example) a
 - Cached demos are synthetic and intended for demonstration, not factual evaluation.
 - No public hosted deployment is configured yet unless the team adds one before submission.
 
-## Submission Checklist
 
-- [ ] Project title: DeepQuery
-- [ ] Team name: DeepInsight
-- [ ] Track: Agents Track
-- [ ] Loom video URL added
-- [ ] Repo public
-- [ ] README includes quick start, architecture, env vars, data provenance, limitations
-- [ ] Deployed URL or screen capture added
-- [ ] Team roster completed
-- [ ] 150-300 word write-up included
