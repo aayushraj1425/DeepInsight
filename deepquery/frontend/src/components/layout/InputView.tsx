@@ -1,6 +1,8 @@
 import { useState, useRef } from "react"
 import { ArrowRight, Paperclip, X, FileText, FileSpreadsheet } from "lucide-react"
 import logo from "../../assets/logo.png"
+import { HomeResearchAnimation } from "./HomeResearchAnimation"
+import { PipelineDiagram } from "./PipelineDiagram"
 
 const EXAMPLE_QUERIES = [
   "GLP-1 effects on cognition",
@@ -30,42 +32,44 @@ export function InputView({ onAnalyze }: InputViewProps) {
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center px-6 py-20 bg-brand-background">
+    <div className="flex min-h-full w-full flex-col items-center justify-start bg-brand-background px-4 py-8 sm:px-6 sm:py-10 lg:justify-center lg:py-12">
       {/* Logo */}
-      <div className="mb-14 flex items-center gap-3 animate-slide-in">
+      <div className="mb-8 flex items-center gap-3 animate-slide-in sm:mb-10">
         <img src={logo} alt="DeepQuery" className="h-14 w-14 rounded-xl object-contain" />
         <span className="font-serif text-2xl font-bold text-brand-ink">DeepQuery</span>
       </div>
 
       {/* Hook */}
       <h1
-        className="font-serif text-center font-bold text-brand-ink leading-tight animate-slide-in"
-        style={{ fontSize: "clamp(2rem, 5vw, 3.5rem)", animationDelay: "60ms", maxWidth: "760px" }}
+        className="max-w-3xl text-center font-serif text-3xl font-bold leading-tight text-brand-ink animate-slide-in sm:text-4xl lg:text-5xl"
+        style={{ animationDelay: "60ms" }}
       >
         Ask any research question. Watch six agents argue until the evidence holds up.
       </h1>
 
       {/* Motto */}
       <p
-        className="mt-5 text-center text-brand-muted italic animate-slide-in"
-        style={{ fontSize: "clamp(1rem, 2vw, 1.25rem)", animationDelay: "120ms" }}
+        className="mt-5 text-center text-base italic text-brand-muted animate-slide-in sm:text-lg"
+        style={{ animationDelay: "120ms" }}
       >
-        Research that argues with itself.
+        Research that checks itself.
       </p>
+
+      <HomeResearchAnimation />
 
       {/* Search bar */}
       <div
-        className="mt-12 w-full max-w-2xl animate-slide-in"
-        style={{ animationDelay: "180ms" }}
+        className="mt-6 w-full max-w-2xl animate-slide-in sm:mt-8"
+        style={{ animationDelay: "220ms" }}
       >
-        <div className="flex items-center gap-3 rounded-2xl border border-[#E5E7EB] bg-white px-5 py-3.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] transition-all focus-within:border-brand-accent/50 focus-within:shadow-[0_10px_40px_-10px_rgba(15,118,110,0.20)]">
+        <div className="flex items-center gap-2 rounded-2xl border border-[#E5E7EB] bg-white px-3 py-3.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.08)] transition-all focus-within:border-brand-accent/50 focus-within:shadow-[0_10px_40px_-10px_rgba(226,90,61,0.18)] sm:gap-3 sm:px-5">
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             placeholder="e.g. Does intermittent fasting reduce inflammation markers?"
-            className="flex-1 bg-transparent text-base text-brand-ink placeholder-brand-muted/50 focus:outline-none"
+            className="min-w-0 flex-1 bg-transparent text-base text-brand-ink placeholder-brand-muted/50 focus:outline-none"
             autoFocus
           />
 
@@ -75,6 +79,7 @@ export function InputView({ onAnalyze }: InputViewProps) {
             onClick={() => fileInputRef.current?.click()}
             className="shrink-0 rounded-lg border border-brand-accent/25 bg-brand-highlight p-1 text-brand-accent shadow-sm transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white"
             title="Attach PDF or CSV"
+            aria-label="Attach PDF or CSV"
           >
             <Paperclip size={18} />
           </button>
@@ -91,7 +96,8 @@ export function InputView({ onAnalyze }: InputViewProps) {
           <button
             onClick={() => handleSubmit()}
             disabled={!query.trim() && files.length === 0}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-accent text-white shadow-[0_4px_14px_rgba(15,118,110,0.32)] transition-all hover:bg-teal-800 hover:shadow-[0_4px_20px_rgba(15,118,110,0.44)] disabled:bg-brand-highlight disabled:text-brand-accent/45 disabled:shadow-none"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-accent text-white shadow-[0_4px_14px_rgba(226,90,61,0.35)] transition-all hover:opacity-90 hover:shadow-[0_4px_20px_rgba(226,90,61,0.45)] disabled:bg-brand-highlight disabled:text-brand-accent/45 disabled:shadow-none"
+            aria-label="Start research"
           >
             <ArrowRight size={18} />
           </button>
@@ -108,10 +114,11 @@ export function InputView({ onAnalyze }: InputViewProps) {
                 {file.name.endsWith(".csv")
                   ? <FileSpreadsheet size={12} className="text-emerald-500" />
                   : <FileText size={12} className="text-brand-accent" />}
-                {file.name}
+                <span className="max-w-[14rem] truncate">{file.name}</span>
                 <button
                   onClick={() => setFiles((prev) => prev.filter((_, i) => i !== idx))}
                   className="ml-1 rounded-full bg-rose-50 p-0.5 text-rose-600 transition-colors hover:bg-rose-600 hover:text-white"
+                  aria-label={`Remove ${file.name}`}
                 >
                   <X size={11} />
                 </button>
@@ -123,8 +130,8 @@ export function InputView({ onAnalyze }: InputViewProps) {
 
       {/* Example queries */}
       <div
-        className="mt-10 flex flex-col items-center gap-3 animate-slide-in"
-        style={{ animationDelay: "240ms" }}
+        className="mt-8 flex flex-col items-center gap-3 animate-slide-in"
+        style={{ animationDelay: "280ms" }}
       >
         <p className="text-[11px] font-semibold uppercase tracking-widest text-brand-muted/60">
           Try one of these
@@ -134,15 +141,23 @@ export function InputView({ onAnalyze }: InputViewProps) {
             <button
               key={eq}
               onClick={() => handleSubmit(eq)}
-              className="group flex items-center gap-2 rounded-lg border border-brand-accent/20 bg-brand-highlight/60 px-3 py-1.5 text-sm font-medium text-brand-accent transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white"
+              className="group flex max-w-full items-center gap-2 rounded-lg border border-brand-accent/20 bg-brand-highlight/60 px-3 py-1.5 text-sm font-medium text-brand-accent transition-all hover:border-brand-accent hover:bg-brand-accent hover:text-white"
             >
               <span className="h-px w-4 rounded bg-brand-accent/50 transition-all group-hover:w-5 group-hover:bg-white/75" />
-              <span className="underline underline-offset-4 decoration-transparent transition-all group-hover:decoration-white/60">
+              <span className="truncate underline underline-offset-4 decoration-transparent transition-all group-hover:decoration-white/60">
                 "{eq}"
               </span>
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Pipeline diagram */}
+      <div
+        className="mt-10 flex w-full flex-col items-center animate-slide-in sm:mt-12"
+        style={{ animationDelay: "340ms" }}
+      >
+        <PipelineDiagram />
       </div>
     </div>
   )

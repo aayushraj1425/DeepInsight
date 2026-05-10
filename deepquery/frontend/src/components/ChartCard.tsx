@@ -2,13 +2,14 @@ import { useEffect, useId, useRef } from "react"
 import * as d3 from "d3"
 import { BarChart3 } from "lucide-react"
 import { cn } from "../lib/utils"
-import type { ChartSpec } from "../types/events"
+import type { ChartDatumMeta, ChartSpec, EvidenceSelection } from "../types/events"
 
 export type { ChartSpec, PlotlyFigure } from "../types/events"
 
 interface Props {
   chart: ChartSpec
   className?: string
+  onEvidenceSelect?: (selection: EvidenceSelection) => void
 }
 
 type ChartValue = string | number
@@ -20,7 +21,7 @@ interface ChartTrace {
   x?: ChartValue[]
   y?: ChartValue[]
   text?: ChartValue[]
-  customdata?: ChartValue[]
+  customdata?: unknown[]
   marker?: {
     color?: string | string[] | number[]
   }
@@ -35,11 +36,13 @@ interface BarDatum {
   x: string
   y: number
   color: string
+  meta: ChartDatumMeta
 }
 
 interface PointDatum {
   x: number
   y: number
+  meta: ChartDatumMeta
 }
 
 interface ForestDatum {
@@ -47,6 +50,7 @@ interface ForestDatum {
   value: number
   errorPlus: number
   errorMinus: number
+  meta: ChartDatumMeta
 }
 
 type RenderMode = "bar" | "timeline" | "forest" | "unsupported"
@@ -60,6 +64,44 @@ function numericValue(value: ChartValue | undefined): number | null {
   if (value === undefined || value === null) return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function metaAt(trace: ChartTrace, index: number): ChartDatumMeta {
+  const value = trace.customdata?.[index]
+  return value && typeof value === "object" ? value as ChartDatumMeta : {}
+}
+
+function hasEvidence(meta: ChartDatumMeta) {
+  return Array.isArray(meta.evidence) && meta.evidence.length > 0
+}
+
+function evidenceSelection(chart: ChartSpec, label: string, meta: ChartDatumMeta): EvidenceSelection | null {
+  if (!hasEvidence(meta)) return null
+  return {
+    chartTitle: chart.title ?? "Chart",
+    label,
+    evidence: meta.evidence ?? [],
+  }
+}
+
+function sampleWeight(meta: ChartDatumMeta, maxSample: number) {
+  const sampleSize = meta.sampleSize ?? 0
+  if (!maxSample || sampleSize <= 0) return 1
+  return 0.45 + 0.55 * Math.sqrt(sampleSize / maxSample)
+}
+
+function metaTooltip(meta: ChartDatumMeta) {
+  const parts = []
+  if (typeof meta.sampleSize === "number") parts.push(`n: ${meta.sampleSize.toLocaleString()}`)
+  if (typeof meta.pValue === "number") parts.push(`p: ${meta.pValue < 0.001 ? "<0.001" : meta.pValue}`)
+  if (typeof meta.significant === "boolean") parts.push(meta.significant ? "significant" : "not significant")
+  return parts.length ? `<br/>${parts.join("<br/>")}` : ""
+}
+
+function displayLabel(value: string, limit = 34) {
+  const label = value.replace(/_/g, " ").trim()
+  if (label.length <= limit) return label
+  return `${label.slice(0, limit - 1).trim()}...`
 }
 
 function renderModeFor(chart: ChartSpec): RenderMode {
@@ -76,7 +118,7 @@ function renderModeFor(chart: ChartSpec): RenderMode {
   return "unsupported"
 }
 
-export function ChartCard({ chart, className }: Props) {
+export function ChartCard({ chart, className, onEvidenceSelect }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartId = `chart-${useId().replace(/:/g, "")}`
   const renderMode = renderModeFor(chart)
@@ -97,8 +139,8 @@ export function ChartCard({ chart, className }: Props) {
 
     const type = dataObj.type
 
-    const margin = renderMode === "forest"
-      ? { top: 20, right: 34, bottom: 44, left: 190 }
+    const margin = renderMode === "forest" || renderMode === "bar"
+      ? { top: 20, right: 34, bottom: 44, left: 210 }
       : { top: 20, right: 30, bottom: 40, left: 48 }
     const width = container.clientWidth - margin.left - margin.right
     const height = container.clientHeight - margin.top - margin.bottom
@@ -118,33 +160,54 @@ export function ChartCard({ chart, className }: Props) {
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`)
 
+    const defs = svg.append("defs")
+    const nonSigPatternId = `${chartId}-non-significant`
+    const nonSigPattern = defs.append("pattern")
+      .attr("id", nonSigPatternId)
+      .attr("patternUnits", "userSpaceOnUse")
+      .attr("width", 6)
+      .attr("height", 6)
+    nonSigPattern.append("rect")
+      .attr("width", 6)
+      .attr("height", 6)
+      .attr("fill", "#FFEDD5")
+      .attr("opacity", 0.72)
+    nonSigPattern.append("path")
+      .attr("d", "M0,6 L6,0 M-1,1 L1,-1 M5,7 L7,5")
+      .attr("stroke", "#E25A3D")
+      .attr("stroke-width", 1)
+      .attr("opacity", 0.45)
+
     if (type === "bar" && renderMode === "bar") {
       const data: BarDatum[] = dataObj.x.map((xVal, i) => ({
         x: String(xVal),
         y: Number(dataObj.y?.[i] ?? 0),
         color: Array.isArray(dataObj.marker?.color)
           ? String(dataObj.marker.color[i])
-          : dataObj.marker?.color || "#0F766E",
+          : dataObj.marker?.color || "#E25A3D",
+        meta: metaAt(dataObj, i),
       })).filter((d) => Number.isFinite(d.y))
 
       if (data.length === 0) return
 
-      const minY = d3.min(data, (d) => d.y) ?? 0
-      const maxY = d3.max(data, (d) => d.y) ?? 0
+      const minX = d3.min(data, (d) => d.y) ?? 0
+      const maxX = d3.max(data, (d) => d.y) ?? 0
 
-      const x = d3.scaleBand<string>().domain(data.map((d) => d.x)).range([0, width]).padding(0.3)
-      const y = d3.scaleLinear().domain([Math.min(0, minY), Math.max(0, maxY)]).nice().range([height, 0])
+      const x = d3.scaleLinear().domain([Math.min(0, minX), Math.max(0, maxX)]).nice().range([0, width])
+      const y = d3.scaleBand<string>().domain(data.map((d) => d.x)).range([0, height]).padding(0.28)
+      const maxSample = d3.max(data, (d) => d.meta.sampleSize ?? 0) ?? 0
 
       svg.append("g")
         .attr("class", "grid")
-        .call(d3.axisLeft(y).tickSize(-width).tickFormat(() => ""))
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x).tickSize(-height).tickFormat(() => ""))
         .selectAll("line")
         .attr("stroke", "#E5E7EB")
         .attr("stroke-dasharray", "3,3")
 
       svg.append("g")
         .attr("transform", `translate(0,${height})`)
-        .call(d3.axisBottom(x).tickSize(0))
+        .call(d3.axisBottom(x).tickSize(0).ticks(5))
         .call((g) => g.select(".domain").attr("stroke", "#E5E7EB"))
         .selectAll("text")
         .attr("dy", "1em")
@@ -153,7 +216,7 @@ export function ChartCard({ chart, className }: Props) {
         .attr("font-family", "Inter, sans-serif")
 
       svg.append("g")
-        .call(d3.axisLeft(y).tickSize(0).ticks(5))
+        .call(d3.axisLeft(y).tickSize(0).tickFormat((value) => displayLabel(String(value))))
         .call((g) => g.select(".domain").attr("stroke", "#E5E7EB"))
         .selectAll("text")
         .attr("dx", "-0.5em")
@@ -161,15 +224,14 @@ export function ChartCard({ chart, className }: Props) {
         .attr("font-size", "11px")
         .attr("font-family", "Inter, sans-serif")
 
-      const defs = svg.append("defs")
       data.forEach((_row, i) => {
         const gradientId = `${chartId}-bar-${i}`
         const gradient = defs.append("linearGradient")
           .attr("id", gradientId)
-          .attr("x1", "0%").attr("x2", "0%")
-          .attr("y1", "100%").attr("y2", "0%")
-        gradient.append("stop").attr("offset", "0%").attr("stop-color", "#CCFBF1").attr("stop-opacity", 1)
-        gradient.append("stop").attr("offset", "100%").attr("stop-color", "#0F766E").attr("stop-opacity", 1)
+          .attr("x1", "0%").attr("x2", "100%")
+          .attr("y1", "0%").attr("y2", "0%")
+        gradient.append("stop").attr("offset", "0%").attr("stop-color", "#FFEDD5").attr("stop-opacity", 1)
+        gradient.append("stop").attr("offset", "100%").attr("stop-color", "#E25A3D").attr("stop-opacity", 1)
       })
 
       svg.selectAll<SVGPathElement, BarDatum>(".bar")
@@ -177,27 +239,31 @@ export function ChartCard({ chart, className }: Props) {
         .enter()
         .append("path")
         .attr("class", "bar")
-        .attr("fill", (_d, i) => `url(#${chartId}-bar-${i})`)
+        .attr("fill", (d, i) => d.meta.significant === false ? `url(#${nonSigPatternId})` : `url(#${chartId}-bar-${i})`)
+        .attr("cursor", (d) => hasEvidence(d.meta) ? "pointer" : "default")
         .attr("d", (d) => {
-          const zero = y(0)
-          const barY = Math.min(y(d.y), zero)
-          const barHeight = Math.abs(y(d.y) - zero)
+          const zero = x(0)
+          const barX = Math.min(x(d.y), zero)
+          const barWidth = Math.abs(x(d.y) - zero)
           const r = 4
-          const xVal = x(d.x)!
-          const w = x.bandwidth()
+          const h = y.bandwidth() * sampleWeight(d.meta, maxSample)
+          const yVal = y(d.x)! + (y.bandwidth() - h) / 2
           if (d.y >= 0) {
-            return `M${xVal},${barY+barHeight} L${xVal},${barY+r} Q${xVal},${barY} ${xVal+r},${barY} L${xVal+w-r},${barY} Q${xVal+w},${barY} ${xVal+w},${barY+r} L${xVal+w},${barY+barHeight} Z`
-          } else {
-            return `M${xVal},${zero} L${xVal},${barY+barHeight-r} Q${xVal},${barY+barHeight} ${xVal+r},${barY+barHeight} L${xVal+w-r},${barY+barHeight} Q${xVal+w},${barY+barHeight} ${xVal+w},${barY+barHeight-r} L${xVal+w},${zero} Z`
+            return `M${zero},${yVal} L${barX + barWidth - r},${yVal} Q${barX + barWidth},${yVal} ${barX + barWidth},${yVal + r} L${barX + barWidth},${yVal + h - r} Q${barX + barWidth},${yVal + h} ${barX + barWidth - r},${yVal + h} L${zero},${yVal + h} Z`
           }
+          return `M${zero},${yVal} L${barX + r},${yVal} Q${barX},${yVal} ${barX},${yVal + r} L${barX},${yVal + h - r} Q${barX},${yVal + h} ${barX + r},${yVal + h} L${zero},${yVal + h} Z`
         })
         .style("opacity", 0)
         .on("mouseover", function (event, d) {
-          tooltip.html(`<b>${d.x}</b><br/>Value: ${d.y}`)
+          tooltip.html(`<b>${displayLabel(d.x, 80)}</b><br/>Value: ${d.y}${metaTooltip(d.meta)}`)
                  .style("left", `${event.pageX + 10}px`)
                  .style("top", `${event.pageY - 28}px`)
                  .classed("hidden", false)
-          d3.select(this).style("filter", "drop-shadow(0 4px 12px rgba(15,118,110,0.3))")
+          d3.select(this).style("filter", "drop-shadow(0 4px 12px rgba(226,90,61,0.35))")
+        })
+        .on("click", (_event, d) => {
+          const selection = evidenceSelection(chart, d.x, d.meta)
+          if (selection) onEvidenceSelect?.(selection)
         })
         .on("mouseout", function () {
           tooltip.classed("hidden", true)
@@ -218,6 +284,7 @@ export function ChartCard({ chart, className }: Props) {
           value: value ?? Number.NaN,
           errorPlus,
           errorMinus,
+          meta: metaAt(dataObj, i),
         }
       }).filter((d) => Number.isFinite(d.value))
 
@@ -227,6 +294,7 @@ export function ChartCard({ chart, className }: Props) {
       const high = d3.max(data, (d) => d.value + d.errorPlus) ?? 0
       const x = d3.scaleLinear().domain([Math.min(0, low), Math.max(0, high)]).nice().range([0, width])
       const y = d3.scaleBand<string>().domain(data.map((d) => d.label)).range([0, height]).padding(0.34)
+      const maxSample = d3.max(data, (d) => d.meta.sampleSize ?? 0) ?? 0
 
       svg.append("g")
         .attr("class", "grid")
@@ -276,7 +344,7 @@ export function ChartCard({ chart, className }: Props) {
         .attr("x2", (d) => x(d.value + d.errorPlus))
         .attr("y1", 0)
         .attr("y2", 0)
-        .attr("stroke", "#0F766E")
+        .attr("stroke", "#E25A3D")
         .attr("stroke-width", 2)
         .attr("stroke-linecap", "round")
         .attr("opacity", (d) => d.errorPlus || d.errorMinus ? 1 : 0)
@@ -284,20 +352,32 @@ export function ChartCard({ chart, className }: Props) {
       rows.append("circle")
         .attr("cx", (d) => x(d.value))
         .attr("cy", 0)
-        .attr("r", 5)
-        .attr("fill", "#FFFFFF")
-        .attr("stroke", "#0F766E")
+        .attr("r", (d) => 4 + 4 * sampleWeight(d.meta, maxSample))
+        .attr("fill", (d) => d.meta.significant === false ? `url(#${nonSigPatternId})` : d.meta.significant === true ? "#E25A3D" : "#FFFFFF")
+        .attr("stroke", "#E25A3D")
         .attr("stroke-width", 2.5)
+        .attr("cursor", (d) => hasEvidence(d.meta) ? "pointer" : "default")
         .on("mouseover", function (event, d) {
-          tooltip.html(`<b>${d.label}</b><br/>Value: ${d.value}`)
+          tooltip.html(`<b>${d.label}</b><br/>Value: ${d.value}${metaTooltip(d.meta)}`)
                  .style("left", `${event.pageX + 10}px`)
                  .style("top", `${event.pageY - 28}px`)
                  .classed("hidden", false)
-          d3.select(this).transition().duration(200).attr("r", 7).attr("fill", "#0F766E")
+          d3.select(this).transition().duration(200).attr("r", 8).attr("fill", "#E25A3D")
+        })
+        .on("click", (_event, d) => {
+          const selection = evidenceSelection(chart, d.label, d.meta)
+          if (selection) onEvidenceSelect?.(selection)
         })
         .on("mouseout", function () {
           tooltip.classed("hidden", true)
-          d3.select(this).transition().duration(200).attr("r", 5).attr("fill", "#FFFFFF")
+          d3.select(this)
+            .transition()
+            .duration(200)
+            .attr("r", (d) => 4 + 4 * sampleWeight((d as ForestDatum).meta, maxSample))
+            .attr("fill", (d) => {
+              const meta = (d as ForestDatum).meta
+              return meta.significant === false ? `url(#${nonSigPatternId})` : meta.significant === true ? "#E25A3D" : "#FFFFFF"
+            })
         })
 
       rows.transition()
@@ -308,12 +388,13 @@ export function ChartCard({ chart, className }: Props) {
     } else if (type === "scatter" && renderMode === "timeline") {
       const data: PointDatum[] = dataObj.x.map((xVal, i) => ({
         x: Number(xVal),
-        y: Number(dataObj.y?.[i] ?? 0)
+        y: Number(dataObj.y?.[i] ?? 0),
+        meta: metaAt(dataObj, i),
       })).filter((d) => Number.isFinite(d.x) && Number.isFinite(d.y))
 
       if (data.length === 0) return
 
-      const color = "#0F766E"
+      const color = "#E25A3D"
       const xExtent = d3.extent(data, (d) => d.x)
       const minX = xExtent[0] ?? 0
       const maxX = xExtent[1] ?? minX + 1
@@ -325,6 +406,7 @@ export function ChartCard({ chart, className }: Props) {
       const x = d3.scaleLinear().domain([minX, maxX === minX ? minX + 1 : maxX + 1]).range([0, width])
 
       const y = d3.scaleLinear().domain([baseline, yMax]).nice().range([height, 0])
+      const maxSample = d3.max(data, (d) => d.meta.sampleSize ?? 0) ?? 0
 
       svg.append("g")
         .attr("class", "grid")
@@ -363,7 +445,6 @@ export function ChartCard({ chart, className }: Props) {
         .y1(d => y(d.y))
         .curve(d3.curveMonotoneX)
 
-      const defs = svg.append("defs")
       const areaGradientId = `${chartId}-area`
       const gradient = defs.append("linearGradient")
         .attr("id", areaGradientId)
@@ -401,20 +482,32 @@ export function ChartCard({ chart, className }: Props) {
         .append("circle")
         .attr("cx", (d) => x(d.x))
         .attr("cy", (d) => y(d.y))
-        .attr("r", 5)
-        .attr("fill", "#FFFFFF")
+        .attr("r", (d) => 4 + 4 * sampleWeight(d.meta, maxSample))
+        .attr("fill", (d) => d.meta.significant === false ? `url(#${nonSigPatternId})` : d.meta.significant === true ? color : "#FFFFFF")
         .attr("stroke", color)
         .attr("stroke-width", 2)
+        .attr("cursor", (d) => hasEvidence(d.meta) ? "pointer" : "default")
         .on("mouseover", function (event, d) {
-          tooltip.html(`<b>${d.x}</b><br/>Value: ${d.y}`)
+          tooltip.html(`<b>${d.x}</b><br/>Value: ${d.y}${metaTooltip(d.meta)}`)
                  .style("left", `${event.pageX + 10}px`)
                  .style("top", `${event.pageY - 28}px`)
                  .classed("hidden", false)
           d3.select(this).transition().duration(200).attr("r", 7).attr("fill", color)
         })
+        .on("click", (_event, d) => {
+          const selection = evidenceSelection(chart, String(d.x), d.meta)
+          if (selection) onEvidenceSelect?.(selection)
+        })
         .on("mouseout", function () {
           tooltip.classed("hidden", true)
-          d3.select(this).transition().duration(200).attr("r", 5).attr("fill", "#FFFFFF")
+          d3.select(this)
+            .transition()
+            .duration(200)
+            .attr("r", (d) => 4 + 4 * sampleWeight((d as PointDatum).meta, maxSample))
+            .attr("fill", (d) => {
+              const meta = (d as PointDatum).meta
+              return meta.significant === false ? `url(#${nonSigPatternId})` : meta.significant === true ? color : "#FFFFFF"
+            })
         })
         .style("opacity", 0)
         .transition().delay((_, i) => 1500 + i * 100).duration(500).style("opacity", 1)
@@ -423,30 +516,32 @@ export function ChartCard({ chart, className }: Props) {
     return () => {
       d3.selectAll(".absolute.hidden.rounded-md").remove()
     }
-  }, [chart, chartId, renderMode])
+  }, [chart, chartId, onEvidenceSelect, renderMode])
 
   return (
-    <section className={cn("animate-slide-in rounded-xl border border-[#E5E7EB] bg-white p-5 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.06)] transition-all duration-200 hover:shadow-[0_15px_30px_-10px_rgba(0,0,0,0.1)] hover:-translate-y-0.5", className)}>
-      <div className="mb-4 flex items-center gap-3 text-sm font-medium text-brand-ink">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-highlight text-brand-accent">
-          <BarChart3 size={16} />
+    <section className={cn(
+      "animate-slide-in rounded-2xl border border-brand-border bg-white p-5",
+      "shadow-[0_8px_30px_-8px_rgba(226,90,61,0.10)] transition-all duration-200",
+      "hover:shadow-[0_12px_36px_-8px_rgba(226,90,61,0.18)] hover:-translate-y-0.5",
+      className
+    )}>
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-highlight border border-brand-border text-brand-accent">
+          <BarChart3 size={15} />
         </div>
         <span className="truncate font-serif text-base font-bold text-brand-ink">{chart.title ?? "Chart"}</span>
       </div>
-      <div
-        ref={containerRef}
-        className="relative h-[420px] w-full min-w-0 bg-brand-surface rounded-lg"
-      >
+      <div ref={containerRef} className="relative h-[400px] w-full min-w-0 rounded-xl bg-brand-surface overflow-hidden">
         {renderMode === "unsupported" && (
           <div className="flex h-full items-center justify-center px-6 text-center text-sm text-brand-muted">
-            This chart payload is not renderable yet.
+            No renderable data for this chart.
           </div>
         )}
       </div>
       {chart.insight && (
-        <div className="mt-4 pt-4 border-t border-[#E5E7EB]">
-          <p className="text-sm leading-relaxed text-brand-muted font-light flex items-start gap-2">
-            <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-brand-accent shrink-0" />
+        <div className="mt-4 pt-4 border-t border-brand-border">
+          <p className="text-xs leading-relaxed text-brand-muted flex items-start gap-2">
+            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-accent" />
             {chart.insight}
           </p>
         </div>

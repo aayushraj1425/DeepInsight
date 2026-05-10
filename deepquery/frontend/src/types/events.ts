@@ -5,6 +5,7 @@ export type EventType =
   | "tool_result"
   | "critic_decision"
   | "sources_ready"
+  | "synthesis_ready"
   | "chart_ready"
   | "report_ready"
   | "error"
@@ -23,9 +24,53 @@ export interface PlotlyFigure {
   config?: Record<string, unknown>
 }
 
+export interface EvidenceItem {
+  id?: string
+  metric?: string
+  value?: string | number
+  sampleSize?: number | null
+  ci?: string | null
+  pValue?: number | null
+  significant?: boolean | null
+  intervention?: string
+  sourceQuote?: string
+  paperTitle?: string
+  paperId?: string
+  year?: string | number | null
+  url?: string
+  provider?: string
+  groupLabel?: string
+}
+
+export interface EvidenceSelection {
+  chartTitle?: string
+  label?: string
+  evidence: EvidenceItem[]
+}
+
+export interface ChartDatumMeta {
+  label?: string
+  value?: number
+  sampleSize?: number | null
+  pValue?: number | null
+  significant?: boolean | null
+  significantCount?: number
+  evidenceCount?: number
+  evidence?: EvidenceItem[]
+}
+
 export interface ChartSpec {
   template?: string
   title?: string
   insight?: string
   figure?: PlotlyFigure
+}
+
+export interface SynthesisSummary {
+  answer: string
+  confidence?: "high" | "moderate" | "low" | string
+  mostReliableResult?: string
+  mainLimitation?: string
+  evidenceCount?: number
+  studiesCount?: number
 }

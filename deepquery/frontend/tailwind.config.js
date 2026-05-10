@@ -7,11 +7,12 @@ export default {
       colors: {
         brand: {
           background: '#FDFDFD',
-          surface: '#F5F5F5',
+          surface: '#FDF6F3',
           ink: '#1A1A1A',
-          muted: '#666666',
-          accent: '#0F766E',
-          highlight: '#CCFBF1',
+          muted: '#6B7280',
+          accent: '#E25A3D',
+          highlight: '#FFEDD5',
+          border: '#F3D5CC',
         },
       },
       fontFamily: {

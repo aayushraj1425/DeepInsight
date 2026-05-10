@@ -34,7 +34,7 @@ def _build_chart(template: ChartTemplate, findings: list[dict], analysis: dict) 
     if template == "forest_plot":
         figure, insight = forest_plot(findings)
     elif template == "bar_comparison":
-        figure, insight = bar_comparison(analysis.get("compare") or {})
+        figure, insight = bar_comparison(analysis.get("compare") or {}, findings)
     else:
         figure, insight = timeline(findings)
 

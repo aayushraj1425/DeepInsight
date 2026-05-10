@@ -68,7 +68,7 @@ export function Topbar({ onHome, onDownload, onShare, showActions }: TopbarProps
 
             <button
               onClick={handleShare}
-              className="flex h-8 items-center gap-2 rounded-md bg-brand-accent px-3 text-xs font-semibold text-white shadow-[0_2px_8px_rgba(15,118,110,0.30)] transition-all hover:bg-teal-800 hover:shadow-[0_4px_14px_rgba(15,118,110,0.42)]"
+              className="flex h-8 items-center gap-2 rounded-md bg-brand-accent px-3 text-xs font-semibold text-white shadow-[0_2px_8px_rgba(226,90,61,0.35)] transition-all hover:opacity-90 hover:shadow-[0_4px_14px_rgba(226,90,61,0.45)]"
               title="Copy query to clipboard"
               type="button"
             >

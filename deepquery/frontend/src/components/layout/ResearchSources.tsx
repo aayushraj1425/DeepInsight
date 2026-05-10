@@ -4,7 +4,7 @@ import { ChevronDown, ExternalLink, FileText } from "lucide-react"
 export interface ResearchSource {
   title: string
   provider: string
-  url: string
+  url?: string
   year?: number
   citationCount?: number
 }
@@ -15,6 +15,24 @@ interface ResearchSourcesProps {
 
 export function ResearchSources({ sources }: ResearchSourcesProps) {
   const [isOpen, setIsOpen] = useState(true)
+
+  const sourceContent = (source: ResearchSource) => (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="line-clamp-2 text-sm font-medium leading-5 text-brand-ink">
+          {source.title}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-brand-muted">
+          <span>{source.provider}</span>
+          {source.year && <span>{source.year}</span>}
+          {typeof source.citationCount === "number" && (
+            <span>{source.citationCount.toLocaleString()} citations</span>
+          )}
+        </div>
+      </div>
+      {source.url && <ExternalLink size={14} className="mt-0.5 shrink-0 text-brand-accent" />}
+    </div>
+  )
 
   return (
     <section className="rounded-xl border border-[#E5E7EB] bg-white p-4 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)]">
@@ -42,29 +60,24 @@ export function ResearchSources({ sources }: ResearchSourcesProps) {
             </div>
           ) : (
             sources.map((source) => (
-              <a
-                key={`${source.provider}-${source.title}`}
-                href={source.url}
-                target="_blank"
-                rel="noreferrer"
-                className="block rounded-lg border border-[#E5E7EB] bg-brand-surface p-3 transition-all hover:border-brand-accent/40 hover:bg-brand-highlight/40 hover:-translate-y-0.5"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="line-clamp-2 text-sm font-medium leading-5 text-brand-ink">
-                      {source.title}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-brand-muted">
-                      <span>{source.provider}</span>
-                      {source.year && <span>{source.year}</span>}
-                      {typeof source.citationCount === "number" && (
-                        <span>{source.citationCount.toLocaleString()} citations</span>
-                      )}
-                    </div>
-                  </div>
-                  <ExternalLink size={14} className="mt-0.5 shrink-0 text-brand-accent" />
+              source.url ? (
+                <a
+                  key={`${source.provider}-${source.title}`}
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-lg border border-[#E5E7EB] bg-brand-surface p-3 transition-all hover:border-brand-accent/40 hover:bg-brand-highlight/40 hover:-translate-y-0.5"
+                >
+                  {sourceContent(source)}
+                </a>
+              ) : (
+                <div
+                  key={`${source.provider}-${source.title}`}
+                  className="rounded-lg border border-[#E5E7EB] bg-brand-surface p-3"
+                >
+                  {sourceContent(source)}
                 </div>
-              </a>
+              )
             ))
           )}
         </div>

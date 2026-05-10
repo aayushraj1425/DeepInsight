@@ -40,14 +40,14 @@ async def search_papers(query: str, limit: int = 6) -> list[dict]:
     for p in raw:
         abstract = p.get("abstract") or ""
 
-        # Must have a real abstract (not a stub)
-        if len(abstract) < 300:
+        # Must have a real abstract (not a one-liner stub)
+        if len(abstract) < 150:
             continue
 
         # Prefer journal articles / reviews; fall back to anything with citations
         pub_types = p.get("publicationTypes") or []
         is_peer_reviewed = any(t in _ACCEPTED_TYPES for t in pub_types)
-        has_citations = (p.get("citationCount") or 0) >= 5
+        has_citations = (p.get("citationCount") or 0) >= 3
 
         if not (is_peer_reviewed or has_citations):
             continue

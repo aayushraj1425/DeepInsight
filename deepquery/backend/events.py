@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 EventType = Literal[
     "node_start", "node_end", "tool_call", "tool_result",
-    "critic_decision", "chart_ready", "report_ready",
+    "critic_decision", "sources_ready", "synthesis_ready", "chart_ready", "report_ready",
     "error", "done"
 ]
 

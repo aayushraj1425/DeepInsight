@@ -63,6 +63,15 @@ def _validate_findings(findings: list[Finding], source_text: str) -> list[Findin
     return valid
 
 
+def _source_url(paper: dict) -> str:
+    paper_id = paper.get("paper_id", "")
+    if paper.get("url"):
+        return paper["url"]
+    if paper_id and not paper_id.startswith(("file:", "pmid:", "arxiv:", "oa:")):
+        return f"https://www.semanticscholar.org/paper/{paper_id}"
+    return ""
+
+
 async def _extract_one(paper: dict) -> list[dict]:
     # Fetch the best available text: full paper body > abstract+tldr
     source_text = await fetch_full_text(paper)
@@ -118,6 +127,9 @@ async def _extract_one(paper: dict) -> list[dict]:
             row = f.model_dump()
             row["paper_title"] = paper["title"]
             row["year"] = paper.get("year")
+            row["paper_id"] = paper.get("paper_id", "")
+            row["source"] = paper.get("source") or "semantic_scholar"
+            row["url"] = _source_url(paper)
             rows.append(row)
         return rows
 

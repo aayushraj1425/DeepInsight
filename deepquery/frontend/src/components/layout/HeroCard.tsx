@@ -14,59 +14,40 @@ interface HeroCardProps {
   metrics: HeroMetric[]
 }
 
-const STATUS_COPY: Record<HeroStatus, { label: string; className: string; Icon: typeof Loader2 }> = {
-  running: {
-    label: "Running",
-    className: "border-brand-accent/40 bg-brand-highlight text-brand-accent",
-    Icon: Loader2,
-  },
-  done: {
-    label: "Done",
-    className: "border-emerald-300 bg-emerald-50 text-emerald-700",
-    Icon: CheckCircle2,
-  },
-  error: {
-    label: "Error",
-    className: "border-red-300 bg-red-50 text-red-700",
-    Icon: AlertTriangle,
-  },
-}
-
 export function HeroCard({ status, title, summary, metrics }: HeroCardProps) {
-  const statusConfig = STATUS_COPY[status]
-  const StatusIcon = statusConfig.Icon
-
   return (
-    <section className="rounded-2xl border border-[#E5E7EB] bg-white p-8 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.05)]">
-      <div className="flex flex-col gap-8 lg:flex-row lg:items-start lg:justify-between">
+    <section className="rounded-2xl border border-brand-border bg-white p-6 shadow-[0_8px_30px_-8px_rgba(226,90,61,0.12)]">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div
-            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusConfig.className}`}
-          >
-            <StatusIcon size={14} className={status === "running" ? "animate-spin" : ""} />
-            {statusConfig.label}
+          {/* Status badge */}
+          <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold border ${
+            status === "running" ? "border-brand-border bg-brand-highlight text-brand-accent" :
+            status === "done"    ? "border-green-200 bg-green-50 text-green-700" :
+                                   "border-red-200 bg-red-50 text-red-700"
+          }`}>
+            {status === "running" && <Loader2 size={13} className="animate-spin" />}
+            {status === "done"    && <CheckCircle2 size={13} />}
+            {status === "error"   && <AlertTriangle size={13} />}
+            {status === "running" ? "Running" : status === "done" ? "Complete" : "Error"}
           </div>
 
-          <h1 className="mt-6 max-w-3xl font-serif text-3xl font-bold leading-tight tracking-tight text-brand-ink flex items-center gap-3">
-            {title}
-            {status === "done" && <Sparkles size={22} className="text-brand-accent" />}
+          <h1 className="mt-4 font-serif text-2xl font-bold leading-tight tracking-tight text-brand-ink flex items-start gap-3">
+            <span>{title}</span>
+            {status === "done" && <Sparkles size={20} className="shrink-0 mt-1 text-brand-accent" />}
           </h1>
-          <p className="mt-4 max-w-4xl text-base leading-relaxed text-brand-muted font-light">
-            {summary}
-          </p>
+          <p className="mt-3 text-sm leading-relaxed text-brand-muted">{summary}</p>
         </div>
 
-        <div className="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-4 lg:w-[380px] lg:grid-cols-2">
+        {/* Metrics */}
+        <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-[340px] lg:grid-cols-2">
           {metrics.slice(0, 4).map((metric, i) => (
             <div
               key={metric.label}
-              className="rounded-xl border border-[#E5E7EB] bg-brand-surface px-4 py-4 transition-all duration-200 hover:border-brand-accent/40 hover:shadow-[0_10px_30px_-10px_rgba(0,0,0,0.08)] hover:-translate-y-0.5"
-              style={{ animation: `slideUp 0.5s ease-out ${i * 0.1}s both` }}
+              className="rounded-xl border border-brand-border bg-brand-surface px-4 py-3.5 transition-all hover:border-brand-accent/40 hover:-translate-y-0.5 hover:shadow-[0_8px_20px_-4px_rgba(226,90,61,0.15)]"
+              style={{ animation: `slideUp 0.4s ease-out ${i * 80}ms both` }}
             >
-              <div className="text-[11px] font-medium uppercase tracking-wider text-brand-muted">{metric.label}</div>
-              <div className="mt-2 truncate font-mono text-2xl font-bold text-brand-ink">
-                {metric.value}
-              </div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-brand-muted">{metric.label}</div>
+              <div className="mt-1.5 font-mono text-2xl font-bold text-brand-ink">{metric.value}</div>
             </div>
           ))}
         </div>

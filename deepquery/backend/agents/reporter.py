@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 from agents.state import AgentState
 from events import AgentEvent
@@ -6,6 +8,18 @@ from runtime import emit
 
 
 class ResearchReport(BaseModel):
+    executive_summary: str = Field(
+        description="One direct, decision-support answer to the research question grounded only in provided evidence"
+    )
+    confidence: Literal["high", "moderate", "low"] = Field(
+        description="Overall confidence based on finding count, sample sizes, statistical support, and source quality"
+    )
+    most_reliable_result: str = Field(
+        description="The strongest or most reliable specific result, mentioning n/p-value when available"
+    )
+    main_limitation: str = Field(
+        description="The most important caveat that should temper interpretation"
+    )
     markdown: str = Field(description="Concise markdown research report for the user")
 
 
@@ -50,23 +64,28 @@ async def reporter_node(state: AgentState) -> dict:
             {
                 "role": "system",
                 "content": (
-                    "Write a markdown research report grounded in the provided sources.\n\n"
+                    "Write a decision-support research synthesis grounded in the provided sources.\n\n"
                     "You have two inputs: (A) extracted numeric findings with source quotes, "
                     "and (B) paper/article summaries with their abstracts.\n\n"
                     "RULES:\n"
-                    "1. Use ## Bottom line for a 1-2 sentence answer to the research question.\n"
-                    "2. Use ## Key Findings for bullet points. "
+                    "1. executive_summary must be a direct answer to the research question, not a generic overview. "
+                    "Mention the evidence base size when useful.\n"
+                    "2. confidence must reflect evidence quality: high only for multiple aligned findings with "
+                    "clear p-values/sample sizes; moderate for mixed/sparse evidence; low for weak or mostly qualitative evidence.\n"
+                    "3. most_reliable_result should prefer statistically significant findings with larger sample sizes.\n"
+                    "4. Use ## Bottom line in markdown for a 1-2 sentence answer to the research question.\n"
+                    "5. Use ## Key Findings for bullet points. "
                     "   - If numeric findings exist: cite the number AND the paper title.\n"
                     "     Format: **[metric]**: [value] — [source title], [year]\n"
                     "   - If numeric findings are sparse or absent: synthesize the key takeaways "
                     "     from the paper summaries instead. Name the paper for each point.\n"
-                    "3. Use ## What the Research Says for a 2-4 paragraph synthesis drawing on "
+                    "6. Use ## What the Research Says for a 2-4 paragraph synthesis drawing on "
                     "   the paper abstracts. Be specific — name studies, describe findings, "
                     "   explain mechanisms mentioned in the abstracts.\n"
-                    "4. Use ## Limitations to flag: sparse quantitative data, web-only sources, "
+                    "7. Use ## Limitations to flag: sparse quantitative data, web-only sources, "
                     "   conflicting findings, or gaps in the literature.\n"
-                    "5. NEVER invent numbers. If a number isn't in the findings list, don't cite it.\n"
-                    "6. If sources are web articles rather than peer-reviewed papers, say so."
+                    "8. NEVER invent numbers. If a number isn't in the findings list, don't cite it.\n"
+                    "9. If sources are web articles rather than peer-reviewed papers, say so."
                 ),
             },
             {
@@ -88,12 +107,24 @@ async def reporter_node(state: AgentState) -> dict:
     )
 
     report = result.markdown
+    synthesis = {
+        "answer": result.executive_summary,
+        "confidence": result.confidence,
+        "mostReliableResult": result.most_reliable_result,
+        "mainLimitation": result.main_limitation,
+        "evidenceCount": len(findings),
+        "studiesCount": len({f.get("paper_title") for f in findings if f.get("paper_title")}) or len(papers),
+    }
+    await emit(sid, AgentEvent(
+        type="synthesis_ready", agent="reporter",
+        payload={"synthesis": synthesis, "message": "Synthesis ready"}
+    ))
     await emit(sid, AgentEvent(
         type="report_ready", agent="reporter",
-        payload={"length": len(report), "report": report, "message": "Report ready"}
+        payload={"length": len(report), "report": report, "synthesis": synthesis, "message": "Report ready"}
     ))
     await emit(sid, AgentEvent(
         type="node_end", agent="reporter",
         payload={}
     ))
-    return {"report": report}
+    return {"report": report, "synthesis": synthesis}

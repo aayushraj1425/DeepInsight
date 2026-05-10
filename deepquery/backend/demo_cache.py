@@ -1,4 +1,6 @@
 import asyncio
+import re
+from urllib.parse import quote_plus
 
 from events import AgentEvent
 from runtime import emit
@@ -18,11 +20,12 @@ def _normalize(query: str) -> str:
 
 
 def _chart_specs(findings: list[dict], analysis: dict) -> list[dict]:
+    chart_findings = _cached_findings(findings)
     specs: list[dict] = []
     builders = [
-        ("bar_comparison", lambda: bar_comparison(analysis["compare"])),
-        ("timeline",       lambda: timeline(findings)),
-        ("forest_plot",    lambda: forest_plot(findings)),
+        ("bar_comparison", lambda: bar_comparison(analysis["compare"], chart_findings)),
+        ("timeline",       lambda: timeline(chart_findings)),
+        ("forest_plot",    lambda: forest_plot(chart_findings)),
     ]
     for template, build in builders:
         try:
@@ -36,6 +39,40 @@ def _chart_specs(findings: list[dict], analysis: dict) -> list[dict]:
             "figure": figure,
         })
     return specs[:3]
+
+
+def _source_search_url(title: str) -> str:
+    return f"https://www.semanticscholar.org/search?q={quote_plus(title)}&sort=relevance"
+
+
+def _cached_findings(findings: list[dict]) -> list[dict]:
+    rows = []
+    for finding in findings:
+        title = finding.get("paper_title") or "Cached demo source"
+        rows.append({
+            **finding,
+            "source": finding.get("source") or "cached_demo",
+            "url": finding.get("url") or _source_search_url(title),
+        })
+    return rows
+
+
+def _sources_from_findings(findings: list[dict]) -> list[dict]:
+    sources = []
+    seen = set()
+    for finding in findings:
+        title = finding.get("paper_title") or "Cached demo source"
+        if title in seen:
+            continue
+        seen.add(title)
+        sources.append({
+            "title": title,
+            "provider": "Cached demo / title search",
+            "url": finding.get("url") or _source_search_url(title),
+            "year": finding.get("year"),
+            "citationCount": None,
+        })
+    return sources
 
 
 # ── Sleep deprivation ────────────────────────────────────────────────────────
@@ -167,9 +204,58 @@ def _vitamind_findings() -> list[dict]:
 
 # ── Shared emit helper ───────────────────────────────────────────────────────
 
+def _section(markdown: str, title: str) -> str:
+    match = re.search(rf"##\s+{re.escape(title)}\s+([\s\S]*?)(?=\n##\s+|\s*$)", markdown, re.IGNORECASE)
+    return match.group(1).strip() if match else ""
+
+
+def _clean_markdown(text: str) -> str:
+    return re.sub(r"\[(.*?)\]\(.*?\)", r"\1", re.sub(r"\*\*(.*?)\*\*", r"\1", text)).strip()
+
+
+def _synthesis_from_report(report: str) -> dict:
+    bottom_line = _clean_markdown(_section(report, "Bottom line") or report.split("\n\n", 1)[0])
+    key_findings = [
+        _clean_markdown(re.sub(r"^\s*[-*]\s+", "", line).strip())
+        for line in _section(report, "Key Findings").splitlines()
+        if re.match(r"^\s*[-*]\s+", line)
+    ]
+    limitation = _clean_markdown(_section(report, "Limitations").splitlines()[0]) if _section(report, "Limitations") else ""
+    confidence = "high" if len(key_findings) >= 4 and "p=" in report.lower() else "moderate"
+    return {
+        "answer": bottom_line,
+        "confidence": confidence,
+        "mostReliableResult": key_findings[0] if key_findings else "",
+        "mainLimitation": limitation,
+        "evidenceCount": len(key_findings),
+        "studiesCount": len(key_findings),
+    }
+
+
 async def _emit(session_id: str, event_type: str, agent: str, payload: dict) -> None:
+    if event_type == "report_ready" and "synthesis" not in payload and payload.get("report"):
+        synthesis = _synthesis_from_report(payload["report"])
+        await emit(session_id, AgentEvent(
+            type="synthesis_ready",
+            agent=agent,
+            payload={"synthesis": synthesis, "message": "Synthesis ready"},
+        ))
+        payload = {**payload, "synthesis": synthesis}
+        await asyncio.sleep(0.18)
     await emit(session_id, AgentEvent(type=event_type, agent=agent, payload=payload))
     await asyncio.sleep(0.18)
+
+
+async def _emit_cached_sources(session_id: str, findings: list[dict]) -> None:
+    await _emit(
+        session_id,
+        "sources_ready",
+        "discovery",
+        {
+            "sources": _sources_from_findings(findings),
+            "message": "Cached demo sources ready",
+        },
+    )
 
 
 # ── Demo runners ─────────────────────────────────────────────────────────────
@@ -208,6 +294,7 @@ async def _run_sleep_demo(session_id: str) -> None:
     await _emit(session_id, "node_start", "discovery", {"message": "Searching for 3 subqueries..."})
     await _emit(session_id, "tool_result", "discovery", {"source": "semantic_scholar", "query": "sleep deprivation cognitive performance", "found": 6, "new": 4})
     await _emit(session_id, "node_end", "discovery", {"total_papers": 12})
+    await _emit_cached_sources(session_id, findings)
     await _emit(session_id, "node_start", "extractor", {"message": "Extracting structured findings from 12 papers..."})
     await _emit(session_id, "tool_result", "extractor", {"findings_extracted": len(findings), "papers_processed": 12})
     await _emit(session_id, "node_end", "extractor", {"total_findings": len(findings)})
@@ -260,6 +347,7 @@ async def _run_wage_demo(session_id: str) -> None:
     await _emit(session_id, "node_start", "discovery", {"message": "Searching for 3 subqueries..."})
     await _emit(session_id, "tool_result", "discovery", {"source": "semantic_scholar", "query": "minimum wage employment effects", "found": 6, "new": 3})
     await _emit(session_id, "node_end", "discovery", {"total_papers": 10})
+    await _emit_cached_sources(session_id, findings)
     await _emit(session_id, "node_start", "extractor", {"message": "Extracting structured findings from 10 papers..."})
     await _emit(session_id, "tool_result", "extractor", {"findings_extracted": len(findings), "papers_processed": 10})
     await _emit(session_id, "node_end", "extractor", {"total_findings": len(findings)})
@@ -326,6 +414,7 @@ async def _run_glp1_demo(session_id: str) -> None:
     await _emit(session_id, "node_start", "discovery", {"message": "Searching for 3 subqueries..."})
     await _emit(session_id, "tool_result", "discovery", {"source": "semantic_scholar", "query": "GLP-1 receptor agonists cognitive function", "found": 6, "new": 5})
     await _emit(session_id, "node_end", "discovery", {"total_papers": 14})
+    await _emit_cached_sources(session_id, findings)
     await _emit(session_id, "node_start", "extractor", {"message": "Extracting structured findings from 14 papers..."})
     await _emit(session_id, "tool_result", "extractor", {"findings_extracted": len(findings), "papers_processed": 14})
     await _emit(session_id, "node_end", "extractor", {"total_findings": len(findings)})
@@ -380,6 +469,7 @@ async def _run_microplastic_demo(session_id: str) -> None:
     await _emit(session_id, "node_start", "discovery", {"message": "Searching for 3 subqueries..."})
     await _emit(session_id, "tool_result", "discovery", {"source": "semantic_scholar", "query": "microplastics gut microbiome diversity", "found": 5, "new": 5})
     await _emit(session_id, "node_end", "discovery", {"total_papers": 13})
+    await _emit_cached_sources(session_id, findings)
     await _emit(session_id, "node_start", "extractor", {"message": "Extracting structured findings from 13 papers..."})
     await _emit(session_id, "tool_result", "extractor", {"findings_extracted": len(findings), "papers_processed": 13})
     await _emit(session_id, "node_end", "extractor", {"total_findings": len(findings)})
@@ -445,6 +535,7 @@ async def _run_vitamind_demo(session_id: str) -> None:
     await _emit(session_id, "node_start", "discovery", {"message": "Searching for 3 subqueries..."})
     await _emit(session_id, "tool_result", "discovery", {"source": "semantic_scholar", "query": "vitamin D supplementation depression randomised trial", "found": 6, "new": 5})
     await _emit(session_id, "node_end", "discovery", {"total_papers": 15})
+    await _emit_cached_sources(session_id, findings)
     await _emit(session_id, "node_start", "extractor", {"message": "Extracting structured findings from 15 papers..."})
     await _emit(session_id, "tool_result", "extractor", {"findings_extracted": len(findings), "papers_processed": 15})
     await _emit(session_id, "node_end", "extractor", {"total_findings": len(findings)})
